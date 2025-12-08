@@ -1,0 +1,15 @@
+flask
+flask-cors
+transformers
+sentencepiece
+tokenizers
+torch
+numpy
+pandas
+scikit-learn
+tqdm
+requests
+more-itertools
+pyyaml
+paddlenlp
+opencc-python-reimplemented
