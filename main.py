@@ -1,6 +1,4 @@
-# 添加注释
 import argparse
-
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["MKL_SERVICE_FORCE_INTEL"] = "1"
