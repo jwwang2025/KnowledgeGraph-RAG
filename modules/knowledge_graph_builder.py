@@ -96,7 +96,8 @@ class KnowledgeGraphBuilder:
 
 
     def get_base_kg_from_txt(self):
-        """ Get base knowledge graph by UIE and format it to SPN style
+        """通过 UIE 获取基础知识图谱，并将其格式化为 SPN 风格 
+        Get base knowledge graph by UIE and format it to SPN style
         input: self.text_path
         output: self.refined_kg_path
         """
