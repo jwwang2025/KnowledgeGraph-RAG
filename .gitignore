@@ -24,6 +24,7 @@ coverage
 *.local
 
 weights
+models/bert-base-chinese/
 
 /cypress/videos/
 /cypress/screenshots/

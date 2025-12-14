@@ -26,7 +26,14 @@ class KnowledgeGraphBuilder:
         self.filtered_kg_path = os.path.join(self.data_dir, "base_filtered.json") # 仅过滤无筛选的三元组文件
 
         # self.model_name_or_path = "/data_F/zhijian/fuchuang-kg/SPN4RE/bert_pretrain"
-        self.model_name_or_path = "bert-base-chinese" # 预训练模型的名字
+        # 优先使用本地模型路径，如果不存在则使用模型名称（会从HuggingFace下载）
+        local_model_path = os.path.join("models", "bert-base-chinese")
+        if os.path.exists(local_model_path) and os.path.exists(os.path.join(local_model_path, "tokenizer_config.json")):
+            self.model_name_or_path = local_model_path
+            print(f"使用本地模型路径: {self.model_name_or_path}")
+        else:
+            self.model_name_or_path = "bert-base-chinese" # 预训练模型的名字
+            print(f"使用模型名称（将从HuggingFace下载）: {self.model_name_or_path}")
         self.version = 0    # 会随着迭代次数的增加而增加
         self.kg_paths = [] # 一个数组，代表不同迭代版本的知识图谱
         self.gpu = args.gpu

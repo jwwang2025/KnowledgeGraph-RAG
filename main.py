@@ -27,7 +27,7 @@ if __name__ == "__main__":
 
     else:
         # startup
-        kg_builder.get_base_kg_from_txt() 
+        kg_builder.get_base_kg_from_txt()
 
     # iteration
     max_iteration = 10
