@@ -7,8 +7,10 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 
-# 模型保存路径
-MODEL_DIR = Path(r"G:\大模型应用开发\简历项目\KnowledgeGraph-RAG\models\bert-base-chinese")
+# 模型保存路径（相对于项目根目录）
+# 获取项目根目录（脚本位于 models/model-download/，向上两级到项目根目录）
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+MODEL_DIR = PROJECT_ROOT / "models" / "bert-base-chinese"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 # 镜像站基础URL

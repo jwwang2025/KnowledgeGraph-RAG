@@ -41,35 +41,56 @@ def paddle_relation_ie(content):
         
         # 尝试多种初始化方式
         try:
-            # 方案1：尝试使用 use_fast=False（如果版本支持）
+            # 方案1：优先使用 use_fast=True（动态图模式，避免模型转换问题）
             try:
                 _relation_ie_instance = Taskflow(
                     "information_extraction", 
                     schema=schema_v4.schema, 
                     batch_size=2,
-                    use_fast=False
+                    use_fast=True
                 )
-                print("成功使用 use_fast=False 模式初始化 Taskflow")
-            except TypeError:
-                # 如果 use_fast 参数不支持，尝试不使用该参数
-                print("当前版本不支持 use_fast 参数，尝试默认模式...")
-                _relation_ie_instance = Taskflow(
-                    "information_extraction", 
-                    schema=schema_v4.schema, 
-                    batch_size=2
-                )
+                print("成功使用 use_fast=True 模式初始化 Taskflow（动态图模式）")
+            except (TypeError, ValueError) as e:
+                # 如果 use_fast 参数不支持或值错误，尝试 use_fast=False
+                print(f"use_fast=True 不可用: {e}，尝试 use_fast=False...")
+                try:
+                    _relation_ie_instance = Taskflow(
+                        "information_extraction", 
+                        schema=schema_v4.schema, 
+                        batch_size=2,
+                        use_fast=False
+                    )
+                    print("成功使用 use_fast=False 模式初始化 Taskflow")
+                except TypeError:
+                    # 如果 use_fast 参数完全不支持，尝试不使用该参数
+                    print("当前版本不支持 use_fast 参数，尝试默认模式...")
+                    _relation_ie_instance = Taskflow(
+                        "information_extraction", 
+                        schema=schema_v4.schema, 
+                        batch_size=2
+                    )
         except RuntimeError as e:
             if "inference.pdmodel" in str(e) or "Cannot open file" in str(e):
-                # 如果仍然失败，清理缓存并重试
+                # 如果仍然失败，清理缓存并使用 use_fast=True 重试
                 print(f"初始化失败: {e}")
-                print("清理缓存并重试...")
+                print("清理缓存并使用动态图模式重试...")
                 _clean_cache_if_needed()
-                # 重试一次
-                _relation_ie_instance = Taskflow(
-                    "information_extraction", 
-                    schema=schema_v4.schema, 
-                    batch_size=2
-                )
+                # 使用 use_fast=True 重试（避免模型转换问题）
+                try:
+                    _relation_ie_instance = Taskflow(
+                        "information_extraction", 
+                        schema=schema_v4.schema, 
+                        batch_size=2,
+                        use_fast=True
+                    )
+                    print("使用动态图模式初始化成功")
+                except (TypeError, ValueError):
+                    # 如果不支持 use_fast，使用默认模式
+                    _relation_ie_instance = Taskflow(
+                        "information_extraction", 
+                        schema=schema_v4.schema, 
+                        batch_size=2
+                    )
             else:
                 raise
     
