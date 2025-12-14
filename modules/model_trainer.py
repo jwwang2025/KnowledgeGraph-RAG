@@ -2,9 +2,9 @@ import os
 import json
 import random
 import subprocess
-from prepare.filter import auto_filter
-from prepare.utils import refine_knowledge_graph
-from prepare import cprint as ct
+from modules.prepare.filter import auto_filter
+from modules.prepare.utils import refine_knowledge_graph
+from modules.prepare import cprint as ct
 
 
 class ModelTrainer:
@@ -59,12 +59,12 @@ class ModelTrainer:
         根据不同的数据类型将数据保存数据到指定的文件
         """
         if trg_path.endswith(".json"):
-            with open(trg_path, 'w') as f:
+            with open(trg_path, 'w', encoding='utf-8') as f:
                 for line in data:
                     json_line = json.dumps(line, ensure_ascii=False)
                     f.write(json_line + "\n")
         elif trg_path.endswith(".txt"):
-            with open(trg_path, 'w') as f:
+            with open(trg_path, 'w', encoding='utf-8') as f:
                 for line in data:
                     f.write(line + "\n")
         else:
@@ -74,7 +74,7 @@ class ModelTrainer:
     def split_data(self):
         """将知识图谱数据(SPN_style)切分为三个文件"""
 
-        with open(self.data_path, 'r') as f:
+        with open(self.data_path, 'r', encoding='utf-8') as f:
             f.seek(0)
             file_lines = f.readlines()
             lines_num = random.sample([json.loads(line) for line in file_lines], len(file_lines))
@@ -134,7 +134,7 @@ class ModelTrainer:
 
         assert len(test_lines) == len(prediction)
 
-        with open(self.data_instance_path, 'r') as f:
+        with open(self.data_instance_path, 'r', encoding='utf-8') as f:
             id2rel = json.load(f)["instances"]
 
         # 将预测结果与测试集对齐
@@ -163,7 +163,7 @@ class ModelTrainer:
 
         # 去除origin_lines里面跟pred_lines重复的relationMentions项
         # eg. origin_lines = [{"id": 0,"sentText":"xxxxxx", "relationMentions": [{"em1Text": "美国", "em2Text": "中国", "label": "国籍}]}]
-        with open(self.data_path, 'r') as f:
+        with open(self.data_path, 'r', encoding='utf-8') as f:
             origin_lines = [json.loads(l) for l in f.readlines()]
 
         diff_lines = []
@@ -198,10 +198,10 @@ class ModelTrainer:
         refine_knowledge_graph(self.test_result_format, self.test_result_refine, fast_mode=True)
 
         # 然后跟 self.data_path 里面的 relations 合并，合并后保存到 self.final_knowledge_graph 里面
-        with open(self.data_path, 'r') as f:
+        with open(self.data_path, 'r', encoding='utf-8') as f:
             origin_lines = [json.loads(l) for l in f.readlines()]
 
-        with open(self.test_result_refine, 'r') as f:
+        with open(self.test_result_refine, 'r', encoding='utf-8') as f:
             test_result_refine = [json.loads(l) for l in f.readlines()]
 
 

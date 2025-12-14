@@ -1,14 +1,14 @@
 import os
 import json
 import time
-from prepare.preprocess import process_text
-from prepare.utils import refine_knowledge_graph
-from prepare.process import uie_execute
-from prepare.filter import auto_filter
+from modules.prepare.preprocess import process_text
+from modules.prepare.utils import refine_knowledge_graph
+from modules.prepare.process import uie_execute
+from modules.prepare.filter import auto_filter
 
 from modules.model_trainer import ModelTrainer
 
-from prepare import cprint as ct
+from modules.prepare import cprint as ct
 
 class KnowledgeGraphBuilder:
 
@@ -20,7 +20,7 @@ class KnowledgeGraphBuilder:
         """
         # self.args = args # 不能被序列化
         self.data_dir = os.path.join("data", args.project)  # 存放生成的数据的地方
-        self.text_path = os.path.join("data", "raw_data.txt") # 原始的文本文件
+        self.text_path = os.path.join("data", "raw_data", "raw_data.txt") # 原始的文本文件
         self.base_kg_path = os.path.join(self.data_dir, "base.json") # 生成的三元组文件
         self.refined_kg_path = os.path.join(self.data_dir, "base_refined.json")# 筛选过后的三元组文件
         self.filtered_kg_path = os.path.join(self.data_dir, "base_filtered.json") # 仅过滤无筛选的三元组文件
@@ -78,7 +78,7 @@ class KnowledgeGraphBuilder:
 
         total_rel = 0  # 图谱中的所有三元组的数量（之前的）
         extend_rel = 0 # 图谱中扩展的三元组的数量
-        with open(pre_kg, 'r') as f_pre, open(cur_kg, 'r') as f_cur:
+        with open(pre_kg, 'r', encoding='utf-8') as f_pre, open(cur_kg, 'r', encoding='utf-8') as f_cur:
             pre_lines = [json.loads(line) for line in f_pre.readlines()]
             cur_lines = [json.loads(line) for line in f_cur.readlines()]
 
@@ -110,19 +110,19 @@ class KnowledgeGraphBuilder:
 
         if not os.path.exists(self.base_kg_path):
             all_items = uie_execute(texts)
-            with open(self.base_kg_path, 'w') as f:
+            with open(self.base_kg_path, 'w', encoding='utf-8') as f:
                 for item in all_items:
                     f.writelines(json.dumps(item, ensure_ascii=False) + "\n")
         else:
             print(f"Base KG already exists in {self.base_kg_path}, skip UIE.")
 
         # 4. 算法验证，使用 bertTokenizer 检测一下实体是否还存在于句子里面，并将过滤过的结果保存到 self.filtered_kg_path路径下
-        with open(self.base_kg_path, 'r') as f:
+        with open(self.base_kg_path, 'r', encoding='utf-8') as f:
             all_items = [json.loads(line) for line in f.readlines()]
             filtered_items = auto_filter(all_items, self.model_name_or_path)
 
         # 将filtered_items保存到文件中
-        with open(self.filtered_kg_path, 'w') as f:
+        with open(self.filtered_kg_path, 'w', encoding='utf-8') as f:
             for item in filtered_items:
                 f.writelines(json.dumps(item, ensure_ascii=False) + "\n")
 

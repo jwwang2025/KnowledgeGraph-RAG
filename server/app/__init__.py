@@ -4,7 +4,7 @@ from flask_cors import CORS
 from app.utils.chat_glm import start_model
 
 apps = Flask(__name__)# 这段代码是为了解决跨域问题，Flask默认不支持跨域
-CORS(apps, resources=r'/*')# CORS的用法是
+CORS(apps, resources=r'/*')# CORS的用法是（Cross-Origin Resource Sharing，跨域资源共享
 
 from app.views import chat, graph
 apps.register_blueprint(chat.mod)
