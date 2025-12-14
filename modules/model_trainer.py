@@ -132,7 +132,16 @@ class ModelTrainer:
                 pred_relation.append([pred_rel, head_start_index, head_end_index, tail_start_index, tail_end_index])
             test_pred_lines.update({key: pred_relation})
 
-        assert len(test_lines) == len(prediction)
+        # 检查测试集和预测结果的数量是否匹配
+        test_lines_count = len(test_lines)
+        prediction_count = len(prediction)
+        if test_lines_count != prediction_count:
+            error_msg = (
+                f"测试集行数 ({test_lines_count}) 与预测结果数量 ({prediction_count}) 不匹配！\n"
+                f"这可能是因为数据被重新划分，但使用了旧的预测文件。\n"
+                f"解决方案：删除 {self.prediction} 文件，然后重新运行以生成新的预测结果。"
+            )
+            raise AssertionError(error_msg)
 
         with open(self.data_instance_path, 'r', encoding='utf-8') as f:
             id2rel = json.load(f)["instances"]

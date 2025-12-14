@@ -8,7 +8,7 @@ import urllib.error
 from pathlib import Path
 
 # 模型保存路径
-MODEL_DIR = Path(r"G:\大模型应用开发\简历项目\KnowledgeGraph-RAG\models\bert-base-chinese1")
+MODEL_DIR = Path(r"G:\大模型应用开发\简历项目\KnowledgeGraph-RAG\models\bert-base-chinese")
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 # 镜像站基础URL
