@@ -25,6 +25,7 @@ coverage
 
 weights
 models/bert-base-chinese/
+models/uie-base/
 
 /cypress/videos/
 /cypress/screenshots/

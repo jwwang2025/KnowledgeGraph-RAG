@@ -14,10 +14,10 @@ def clean_uie_cache():
         print(f"找到缓存目录: {cache_dir}")
         try:
             shutil.rmtree(cache_dir)
-            print("✓ 缓存清理成功！")
+            print("[OK] 缓存清理成功！")
             print("下次运行程序时，模型将重新下载和转换。")
         except Exception as e:
-            print(f"✗ 清理失败: {e}")
+            print(f"[ERROR] 清理失败: {e}")
     else:
         print(f"缓存目录不存在: {cache_dir}")
         print("无需清理。")
