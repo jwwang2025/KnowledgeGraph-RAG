@@ -16,6 +16,7 @@ MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 # Hugging Face 模型仓库URL
 # 使用镜像站（hf-mirror.com）以提高下载速度
+# https://hf-mirror.com/xusenlin/uie-base/tree/main
 BASE_URL = "https://hf-mirror.com/xusenlin/uie-base/resolve/main"
 
 # 必需的文件列表
