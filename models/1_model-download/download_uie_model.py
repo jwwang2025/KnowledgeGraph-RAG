@@ -67,11 +67,6 @@ def download_file(url, save_path):
         return False
 
 def main():
-    print("=" * 60)
-    print("开始下载 uie-base 模型文件")
-    print("=" * 60)
-    print(f"模型将保存到: {MODEL_DIR.absolute()}")
-    print("=" * 60)
     
     success_count = 0
     skip_count = 0
@@ -97,32 +92,6 @@ def main():
             failed_files.append(filename)
             print(f"警告: {filename} 下载失败")
     
-    print("\n" + "=" * 60)
-    print(f"下载完成!")
-    print(f"成功: {success_count}, 跳过: {skip_count}, 失败: {len(failed_files)}")
-    print(f"模型路径: {MODEL_DIR.absolute()}")
-    print("=" * 60)
-    
-    # 检查必需文件
-    missing_files = [f for f in REQUIRED_FILES if not (MODEL_DIR / f).exists()]
-    
-    if missing_files:
-        print(f"\n警告: 以下必需文件缺失: {missing_files}")
-        print("模型可能无法正常工作")
-        print("\n您可以手动从以下地址下载:")
-        for filename in missing_files:
-            print(f"  {BASE_URL}/{filename}")
-    else:
-        print("\n✓ 所有必需文件已就绪!")
-        
-        # 检查模型权重文件
-        if not (MODEL_DIR / "pytorch_model.bin").exists():
-            print("\n⚠ 注意: 模型权重文件 (pytorch_model.bin) 未下载")
-            print("模型无法加载，请确保下载了该文件")
-        else:
-            print("\n✓ 模型权重文件已就绪!")
-        
-        print(f"\n现在可以在代码中使用本地路径: {MODEL_DIR.absolute()}")
 if __name__ == "__main__":
     main()
 

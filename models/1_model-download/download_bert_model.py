@@ -55,9 +55,6 @@ def download_file(url, save_path):
         return False
 
 def main():
-    print("=" * 60)
-    print("开始下载 bert-base-chinese 模型文件")
-    print("=" * 60)
     
     success_count = 0
     skip_count = 0
@@ -79,25 +76,6 @@ def main():
             success_count += 1
         else:
             print(f"警告: {filename} 下载失败，但程序可能仍可运行（如果只需要tokenizer）")
-    
-    print("\n" + "=" * 60)
-    print(f"下载完成!")
-    print(f"成功: {success_count}, 跳过: {skip_count}, 总计: {len(FILES_TO_DOWNLOAD)}")
-    print(f"模型路径: {MODEL_DIR.absolute()}")
-    print("=" * 60)
-    
-    # 检查必需文件
-    missing_files = [f for f in REQUIRED_FILES if not (MODEL_DIR / f).exists()]
-    
-    if missing_files:
-        print(f"\n警告: 以下必需文件缺失: {missing_files}")
-        print("tokenizer可能无法正常工作")
-        print("\n您可以手动从以下地址下载:")
-        for filename in missing_files:
-            print(f"  {BASE_URL}/{filename}")
-    else:
-        print("\n✓ 所有必需文件已就绪!")
-        print(f"现在可以在代码中使用本地路径: {MODEL_DIR.absolute()}")
 
 if __name__ == "__main__":
     main()
