@@ -39,7 +39,9 @@ class ModelTrainer:
         self.params = self.generate_running_cmd()
 
     def generate_running_cmd(self):
-        params = "python SPN4RE/main.py"
+        # 使用绝对路径调用 SPN4RE/main.py，避免工作目录不同导致找不到文件
+        spn_main = os.path.join(os.path.dirname(__file__), "SPN4RE", "main.py")
+        params = f"python {spn_main}"
         params += f" --bert_directory {self.model_name_or_path}"
         params += " --max_epoch 10"
         params += " --max_span_length 10"
@@ -193,7 +195,8 @@ class ModelTrainer:
             diff_lines.append(diff_line)
 
         # 去除diff_lines里面不匹配的relationMentions项
-        diff_lines = auto_filter(diff_lines, "bert-base-chinese")
+        # 使用与训练相同的本地/自定义模型路径，避免离线环境去下载
+        diff_lines = auto_filter(diff_lines, self.model_name_or_path)
 
         # 将 test_lines 保存到文件里面
         self.save_data(diff_lines, self.test_result_format)
