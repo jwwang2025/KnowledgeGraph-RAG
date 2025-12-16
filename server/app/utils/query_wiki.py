@@ -7,7 +7,7 @@ cc = OpenCC('s2t')
 class WikiSearcher(object):
 
     def __init__(self) -> None:
-        self.wiki = wikipediaapi.Wikipedia('zh')
+        self.wiki = wikipediaapi.Wikipedia(user_agent='KnowledgeGraph-RAG/1.0', language='zh')
 
     def search(self, query):
 
