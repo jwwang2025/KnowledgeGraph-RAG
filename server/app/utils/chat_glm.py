@@ -30,34 +30,21 @@ def stream_predict(user_input, history=None):
     if not history:
         history = init_history
 
-    print(f"[stream_predict] 收到用户输入: {user_input}")
     ref = ""
 
     # 获取实体
     graph = {}
     entities = []
-    try:
-        print("[stream_predict] 开始实体识别...")
-        entities = ner.get_entities(user_input, etypes=["物体类", "人物类", "地点类", "组织机构类", "事件类", "世界地区类", "术语类"])
-        print(f"[stream_predict] 识别到的实体: {entities}")
-    except Exception as e:
-        print(f"[stream_predict] 实体识别出错: {e}")
-        entities = []
+    entities = ner.get_entities(user_input, etypes=["物体类", "人物类", "地点类", "组织机构类", "事件类", "世界地区类", "术语类"])
+    print("entities: ", entities)
 
     # 获取实体的三元组
     triples = []
-    try:
-        print("[stream_predict] 开始查询知识图谱...")
-        for entity in entities:
-            graph = search_node_item(entity, graph if graph else None)
+    for entity in entities:
+        graph = search_node_item(entity, graph if graph else None)
 
-            if graph:
-                triples += convert_graph_to_triples(graph, entity)
-        print(f"[stream_predict] 找到 {len(triples)} 个三元组")
-    except Exception as e:
-        print(f"[stream_predict] 知识图谱查询出错: {e}")
-        graph = {}
-        triples = []
+        if graph:
+            triples += convert_graph_to_triples(graph, entity)
 
     triples_str = ""
     for t in triples:
@@ -66,25 +53,13 @@ def stream_predict(user_input, history=None):
     if triples_str:
         ref += f"三元组信息：{triples_str}；"
 
-    # 图片搜索
-    try:
-        print("[stream_predict] 开始图片搜索...")
-        image = image_searcher.search(user_input)
-    except Exception as e:
-        print(f"[stream_predict] 图片搜索出错: {e}")
-        image = None
 
-    # Wikipedia 搜索
-    wiki = None
-    try:
-        print("[stream_predict] 开始 Wikipedia 搜索...")
-        for ent in entities + [user_input]:
-            wiki = wiki_searcher.search(ent)
-            if wiki is not None:
-                break
-    except Exception as e:
-        print(f"[stream_predict] Wikipedia 搜索出错: {e}")
-        wiki = None
+    image = image_searcher.search(user_input)
+
+    for ent in entities + [user_input]:
+        wiki = wiki_searcher.search(ent)
+        if wiki is not None:
+            break
 
     # 将Wikipedia搜索到的繁体转为简体
     if wiki:
