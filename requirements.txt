@@ -11,9 +11,9 @@ tqdm>=4.64.0
 requests>=2.28.0
 more-itertools>=8.14.0
 pyyaml>=6.0
-paddlepaddle>=2.4.0,<3.0.0  # 需要 <3.0.0 版本以兼容 paddlenlp 模型转换
+paddlepaddle>=2.4.0,<3.0.0 
 paddlenlp>=2.4.0
-aistudio-sdk<0.3.0  # 需要 <0.3.0 版本以兼容 paddlenlp
+aistudio-sdk<0.3.0  
 opencc-python-reimplemented>=0.1.7
 thefuzz>=0.19.0
 wikipedia-api>=0.6.0

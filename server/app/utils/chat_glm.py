@@ -122,8 +122,31 @@ def stream_predict(user_input, history=None):
 def start_model():
     global model, tokenizer, init_history
 
-    tokenizer = AutoTokenizer.from_pretrained("/fast/zwj/ChatGLM-6B/weights", trust_remote_code=True)
-    model = AutoModel.from_pretrained("/fast/zwj/ChatGLM-6B/weights", trust_remote_code=True).half().cuda()
+    # 从环境变量获取模型路径，如果没有则尝试使用项目根目录下的 models/chatglm-6b
+    # 如果本地路径不存在，则使用HuggingFace Hub上的模型ID
+    default_local_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'models', 'chatglm-6b')
+    default_local_path = os.path.abspath(default_local_path)
+    
+    model_path = os.getenv('CHATGLM_MODEL_PATH', default_local_path if os.path.exists(default_local_path) else 'THUDM/chatglm-6b')
+    
+    # 检查是否是本地路径
+    if os.path.exists(model_path):
+        print(f"使用本地模型路径: {model_path}")
+    else:
+        print(f"使用HuggingFace Hub模型: {model_path}")
+    
+    tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+    model = AutoModel.from_pretrained(model_path, trust_remote_code=True)
+    
+    # 检查CUDA是否可用
+    import torch
+    if torch.cuda.is_available():
+        print("使用GPU (CUDA)")
+        model = model.half().cuda()
+    else:
+        print("使用CPU（注意：CPU模式速度较慢）")
+        model = model.float()
+    
     model.eval()
 
     pre_prompt = "你叫 ChatKG，是一个图谱问答机器人，此为背景。下面开始聊天吧！"

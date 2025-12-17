@@ -26,6 +26,7 @@ coverage
 weights
 models/bert-base-chinese/
 models/uie-base/
+models/chatglm-6b/
 
 /cypress/videos/
 /cypress/screenshots/

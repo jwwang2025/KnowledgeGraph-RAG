@@ -1,5 +1,4 @@
-# Server 目录说明文档(路径中不要有中文cd /root/KnowledgeGraph-RAG-1/server
-python main.py)
+# Server 目录说明文档（路径中不要有中文，先 `cd /root/KnowledgeGraph-RAG-1/server` 后执行 `python main.py`）
 
 本文档详细说明了 `server` 文件夹的目录结构以及各个文件和文件夹的作用。
 
