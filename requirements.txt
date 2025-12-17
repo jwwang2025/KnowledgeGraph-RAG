@@ -1,6 +1,6 @@
 flask>=2.0.0
 flask-cors>=3.0.10
-transformers>=4.27.0
+transformers==4.27.1
 sentencepiece>=0.1.99
 tokenizers>=0.13.0
 torch>=1.13.0
