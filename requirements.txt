@@ -1,5 +1,7 @@
 flask>=2.0.0
 flask-cors>=3.0.10
+
+# ChatGLM-6B 需要 transformers 4.27.0左右
 transformers==4.27.1
 sentencepiece>=0.1.99
 tokenizers>=0.13.0
