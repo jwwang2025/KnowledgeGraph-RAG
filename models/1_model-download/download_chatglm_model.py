@@ -16,6 +16,7 @@ MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 # Hugging Face 模型仓库URL
 # 使用镜像站（hf-mirror.com）以提高下载速度
+# https://github.com/zai-org/ChatGLM-6B
 # https://hf-mirror.com/zai-org/chatglm-6b/tree/main
 BASE_URL = "https://hf-mirror.com/zai-org/chatglm-6b/resolve/main"
 
