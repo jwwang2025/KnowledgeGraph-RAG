@@ -137,6 +137,13 @@ const sendMessage = () => {
     const user_input = state.inputText
     const cur_res_id = state.messages[state.messages.length - 1].id
     state.inputText = ''
+    
+    // 设置超时时间（60秒）
+    const timeoutId = setTimeout(() => {
+      updateLastReceivedMessage('请求超时，请稍后重试', cur_res_id)
+      console.error('请求超时')
+    }, 600000000)
+    
     fetch('/api/chat', {
       method: 'POST',
       body: JSON.stringify({
@@ -147,27 +154,42 @@ const sendMessage = () => {
         'Content-Type': 'application/json'
       }
     }).then((response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
       let pic
       let wiki
       let graph
+      let hasReceivedData = false
+      
       // 逐步读取响应文本
       const readChunk = () => {
         return reader.read().then(({ done, value }) => {
           if (done) {
+            clearTimeout(timeoutId)
             console.log('Finished')
+            // 如果一直没有收到数据，更新消息
+            if (!hasReceivedData) {
+              updateLastReceivedMessage('未收到响应数据，请检查后端服务', cur_res_id)
+            }
             return
           }
 
+          hasReceivedData = true
           info.image = pic
           info.graph = graph
           // 处理维基百科的内容
           info.title = wiki?.title
           info.description = wiki?.summary
-          if (info.graph && info.graph.nodes) {
-            myChart.setOption(graphOption(info.graph));
+          if (info.graph && info.graph.nodes && info.graph.nodes.length > 0) {
+            try {
+              myChart.setOption(graphOption(info.graph));
+            } catch (e) {
+              console.error('图表更新错误:', e)
+            }
           }
 
           buffer += decoder.decode(value, { stream: true })
@@ -183,13 +205,17 @@ const sendMessage = () => {
             graph = data.graph
             buffer = ''
           } catch (e) {
-            console.log(e)
+            console.log('JSON解析错误:', e)
           }
 
           return readChunk()
         })
       }
       return readChunk()
+    }).catch((error) => {
+      clearTimeout(timeoutId)
+      console.error('请求错误:', error)
+      updateLastReceivedMessage('请求失败: ' + error.message + '，请检查后端服务是否正常运行', cur_res_id)
     })
   } else {
     console.log('Please enter a message')

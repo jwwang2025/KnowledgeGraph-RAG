@@ -30,16 +30,24 @@ const state = reactive({
 let myChart;
 
 const fetchWebkitDepData = () => {
-  axios.get('/api/graph').then(response => response.data.data)
+  axios.get('/api/graph')
+    .then(response => {
+      if (!response.data || !response.data.data) {
+        throw new Error('无效的响应数据')
+      }
+      return response.data.data
+    })
     .then(webkitDep => {
       state.graph = webkitDep
       myChart.hideLoading()
-      webkitDep.nodes.forEach(function (node) {
-        node.label = {
-          show: node.symbolSize > 100
-        }
-        node.symbolSize = node.symbolSize / 10
-      })
+      if (webkitDep.nodes && webkitDep.nodes.length > 0) {
+        webkitDep.nodes.forEach(function (node) {
+          node.label = {
+            show: node.symbolSize > 100
+          }
+          node.symbolSize = node.symbolSize / 10
+        })
+      }
       const option = {
         tooltip: {
           show: true, //默认值为true
@@ -89,6 +97,22 @@ const fetchWebkitDepData = () => {
         // animationEasingUpdate: 'quinticInOut', // 数据更新动画的缓动效果
       }
       myChart.setOption(option)
+      // 在数据加载完成后绑定点击事件
+      myChart.off('click')  // 先移除旧的事件监听
+      myChart.on('click', clickNode)
+    })
+    .catch(error => {
+      console.error('加载知识图谱失败:', error)
+      myChart.hideLoading()
+      // 显示错误信息或使用空数据
+      myChart.setOption({
+        title: {
+          text: '加载失败',
+          subtext: error.message || '无法加载知识图谱数据',
+          left: 'center',
+          top: 'center'
+        }
+      })
     })
 }
 
@@ -140,7 +164,7 @@ onMounted(() => {
   myChart = echarts.init(chartRef.value)
   myChart.showLoading()
   fetchWebkitDepData()
-  chart.value.on('click', clickNode)
+  // 点击事件在数据加载完成后绑定（在 fetchWebkitDepData 中）
 })
 </script>
 
