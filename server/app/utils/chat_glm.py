@@ -46,6 +46,11 @@ def stream_predict(user_input, history=None):
         if graph:
             triples += convert_graph_to_triples(graph, entity)
 
+    # 控制三元组数量，避免 prompt 过长
+    MAX_TRIPLES = 10  # 可根据需要调整，如 10～20
+    if len(triples) > MAX_TRIPLES:
+        triples = triples[:MAX_TRIPLES]
+
     triples_str = ""
     for t in triples:
         triples_str += f"({t[0]} {t[1]} {t[2]})；"
@@ -61,12 +66,13 @@ def stream_predict(user_input, history=None):
         if wiki is not None:
             break
 
-    # 将Wikipedia搜索到的繁体转为简体
+    # 将Wikipedia搜索到的繁体转为简体，并控制摘要长度，避免输入过长
     if wiki:
-        ref += cc.convert(wiki.summary)
+        summary = cc.convert(wiki.summary)[:500]  # 只保留前 500 个字符，可按需调整
+        ref += summary
         wiki = {
             "title": cc.convert(wiki.title),
-            "summary": cc.convert(wiki.summary),
+            "summary": summary,
         }
         print(wiki)
     else:
