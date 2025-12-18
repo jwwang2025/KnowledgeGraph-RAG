@@ -7,7 +7,8 @@ import sys
 from pathlib import Path
 
 # 获取项目根目录
-PROJECT_ROOT = Path(__file__).parent.parent.parent
+# 使用 resolve() 确保路径是绝对路径
+PROJECT_ROOT = Path(__file__).resolve().parent
 MODEL_DIR = PROJECT_ROOT / "models" / "chatglm-6b"
 
 def check_model_files():
@@ -119,7 +120,7 @@ def test_chat(model, tokenizer):
     try:
         # 测试问题
         test_questions = [
-            "你好",
+            "你有什么用，你可以干什么，你是谁制作的",
             "请介绍一下你自己",
         ]
         
