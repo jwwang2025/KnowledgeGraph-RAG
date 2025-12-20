@@ -5,6 +5,7 @@ import subprocess
 from modules.prepare.filter import auto_filter
 from modules.prepare.utils import refine_knowledge_graph
 from modules.prepare import cprint as ct
+from config.settings import settings
 
 
 class ModelTrainer:
@@ -43,9 +44,9 @@ class ModelTrainer:
         spn_main = os.path.join(os.path.dirname(__file__), "SPN4RE", "main.py")
         params = f"python {spn_main}"
         params += f" --bert_directory {self.model_name_or_path}"
-        params += " --max_epoch 10"
-        params += " --max_span_length 10"
-        params += " --num_generated_triples 15"
+        params += f" --max_epoch {settings.MAX_EPOCH}"
+        params += f" --max_span_length {settings.MAX_SPAN_LENGTH}"
+        params += f" --num_generated_triples {settings.NUM_GENERATED_TRIPLES}"
         params += " --max_grad_norm 2.5"
         params += " --na_rel_coef 0.25"
         params += f" --train_file {self.train_file}"
@@ -86,9 +87,13 @@ class ModelTrainer:
         assert lines_num is not None, "数据集为空"
 
 
-        train_lines = lines_num[:int(len(lines_num) * 0.5)]
-        valid_lines = lines_num[int(len(lines_num) * 0.5):int(len(lines_num) * 0.7)]
-        test_lines = lines_num[int(len(lines_num) * 0.7):]
+        train_ratio = settings.TRAIN_RATIO
+        valid_ratio = settings.VALID_RATIO
+        test_ratio = settings.TEST_RATIO
+        
+        train_lines = lines_num[:int(len(lines_num) * train_ratio)]
+        valid_lines = lines_num[int(len(lines_num) * train_ratio):int(len(lines_num) * (train_ratio + valid_ratio))]
+        test_lines = lines_num[int(len(lines_num) * (train_ratio + valid_ratio)):]
         self.save_data(train_lines, self.train_file)
         self.save_data(valid_lines, self.valid_file)
         self.save_data(test_lines, self.test_file)

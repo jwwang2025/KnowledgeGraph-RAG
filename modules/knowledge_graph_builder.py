@@ -9,6 +9,7 @@ from modules.prepare.filter import auto_filter
 from modules.model_trainer import ModelTrainer
 
 from modules.prepare import cprint as ct
+from config.settings import settings
 
 class KnowledgeGraphBuilder:
 
@@ -19,24 +20,26 @@ class KnowledgeGraphBuilder:
 
         """
         # self.args = args # 不能被序列化
-        self.data_dir = os.path.join("data", args.project)  # 存放生成的数据的地方
-        self.text_path = os.path.join("data", "raw_data", "raw_data.txt") # 原始的文本文件
+        # 使用配置中的数据目录
+        data_dir = settings.DATA_DIR
+        self.data_dir = os.path.join(str(data_dir), args.project)  # 存放生成的数据的地方
+        self.text_path = str(settings.RAW_DATA_PATH)  # 原始的文本文件
         self.base_kg_path = os.path.join(self.data_dir, "base.json") # 生成的三元组文件
         self.refined_kg_path = os.path.join(self.data_dir, "base_refined.json")# 筛选过后的三元组文件
         self.filtered_kg_path = os.path.join(self.data_dir, "base_filtered.json") # 仅过滤无筛选的三元组文件
 
-        # self.model_name_or_path = "/data_F/zhijian/fuchuang-kg/SPN4RE/bert_pretrain"
-        # 优先使用本地模型路径，如果不存在则使用模型名称（会从HuggingFace下载）
-        local_model_path = os.path.join("models", "bert-base-chinese")
+        # 优先使用本地模型路径，如果不存在则使用配置中的模型名称（会从HuggingFace下载）
+        bert_model_name = settings.BERT_MODEL_NAME
+        local_model_path = os.path.join("models", bert_model_name.split("/")[-1])
         if os.path.exists(local_model_path) and os.path.exists(os.path.join(local_model_path, "tokenizer_config.json")):
             self.model_name_or_path = local_model_path
             print(f"使用本地模型路径: {self.model_name_or_path}")
         else:
-            self.model_name_or_path = "bert-base-chinese" # 预训练模型的名字
+            self.model_name_or_path = bert_model_name  # 使用配置中的模型名称
             print(f"使用模型名称（将从HuggingFace下载）: {self.model_name_or_path}")
         self.version = 0    # 会随着迭代次数的增加而增加
         self.kg_paths = [] # 一个数组，代表不同迭代版本的知识图谱
-        self.gpu = args.gpu
+        self.gpu = args.gpu if args.gpu else settings.DEFAULT_GPU
 
         os.makedirs(self.data_dir, exist_ok=True)
 

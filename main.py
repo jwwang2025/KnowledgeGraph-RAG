@@ -1,9 +1,14 @@
 import argparse
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-os.environ["MKL_SERVICE_FORCE_INTEL"] = "1"
-os.environ["MKL_THREADING_LAYER"] = "GNU"
+# 加载配置系统
+from config.settings import load_dotenv, settings
+
+# 加载 .env 文件中的配置
+load_dotenv()
+
+# 设置 CUDA 环境变量
+settings.setup_cuda()
 
 from modules.knowledge_graph_builder import KnowledgeGraphBuilder
 
@@ -31,15 +36,15 @@ if __name__ == "__main__":
         kg_builder.get_base_kg_from_txt()
 
     # iteration
-    max_iteration = 10
+    max_iteration = settings.MAX_ITERATION
 
     while kg_builder.version < max_iteration:
         kg_builder.run_iteration() # 迭代过程中会自动保存
         extend_ratio = kg_builder.extend_ratio()
         print(f"Extend Ratio: {extend_ratio}")
 
-        if extend_ratio < 0.01:
-            print("Extend Ratio is too low, stop iteration.")
+        if extend_ratio < settings.EXTEND_RATIO_THRESHOLD:
+            print(f"Extend Ratio ({extend_ratio:.4f}) is below threshold ({settings.EXTEND_RATIO_THRESHOLD}), stop iteration.")
             break
 
     print("done!")

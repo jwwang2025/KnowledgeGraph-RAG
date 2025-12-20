@@ -23,6 +23,10 @@ dist-ssr
 coverage
 *.local
 
+# Environment variables
+.env
+.env.local
+
 weights
 models/bert-base-chinese/
 models/uie-base/

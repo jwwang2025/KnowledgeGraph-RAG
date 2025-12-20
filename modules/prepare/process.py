@@ -2,13 +2,22 @@ from pathlib import Path
 from typing import List
 
 import torch
-from data.schema import schema_v4
 from transformers import AutoModel, AutoTokenizer
+from config.settings import settings
 
 # ========== UIE 模型配置（PyTorch 版） ==========
-# 当前文件位于 <repo>/modules/prepare/process.py，因此取上上级目录作为项目根目录
+# 从配置系统获取 UIE 模型路径
+UIE_MODEL_NAME = settings.UIE_MODEL_NAME
+# 优先使用本地模型路径，如果不存在则使用模型名称（会从HuggingFace下载）
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-UIE_MODEL_PATH = PROJECT_ROOT / "models" / "uie-base"
+local_uie_path = PROJECT_ROOT / "models" / UIE_MODEL_NAME.split("/")[-1]
+if local_uie_path.exists() and (local_uie_path / "tokenizer_config.json").exists():
+    UIE_MODEL_PATH = str(local_uie_path)
+    print(f"使用本地 UIE 模型路径: {UIE_MODEL_PATH}")
+else:
+    UIE_MODEL_PATH = UIE_MODEL_NAME
+    print(f"使用 UIE 模型名称（将从HuggingFace下载）: {UIE_MODEL_PATH}")
+
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 _tokenizer = None
 _model = None
@@ -38,10 +47,13 @@ def torch_relation_ie(content: List[str]):
     if isinstance(content, str):
         content = [content]
 
+    # 从配置系统获取 schema
+    schema = settings.get_schema()
+
     return model.predict(
         tokenizer,
         content,
-        schema=schema_v4.schema,
+        schema=schema,
         batch_size=2,
         device=_model_device,
         show_progress_bar=False,

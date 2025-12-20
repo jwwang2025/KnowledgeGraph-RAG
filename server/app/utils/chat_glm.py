@@ -1,6 +1,9 @@
 import os
 import sys
 sys.path.append('server/app')
+# 添加项目根目录到路径，以便导入 config 模块
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 import json
 from opencc import OpenCC
 from transformers import AutoTokenizer, AutoModel
@@ -8,6 +11,7 @@ from app.utils.image_searcher import ImageSearcher
 from app.utils.query_wiki import WikiSearcher
 from app.utils.ner import Ner
 from app.utils.graph_utils import convert_graph_to_triples, search_node_item
+from config.settings import settings
 
 model = None
 tokenizer = None
@@ -128,12 +132,16 @@ def stream_predict(user_input, history=None):
 def start_model():
     global model, tokenizer, init_history
 
-    # 从环境变量获取模型路径，如果没有则尝试使用项目根目录下的 models/chatglm-6b
-    # 如果本地路径不存在，则使用HuggingFace Hub上的模型ID
-    default_local_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'models', 'chatglm-6b')
-    default_local_path = os.path.abspath(default_local_path)
+    # 从配置系统获取模型路径
+    model_path = settings.CHATGLM_MODEL_PATH
     
-    model_path = os.getenv('CHATGLM_MODEL_PATH', default_local_path if os.path.exists(default_local_path) else 'THUDM/chatglm-6b')
+    # 如果是相对路径，转换为绝对路径
+    if not os.path.isabs(model_path) and not model_path.startswith(("http://", "https://")):
+        # 获取项目根目录（从 server/app/utils 向上三级）
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        abs_model_path = os.path.join(project_root, model_path.lstrip("./"))
+        if os.path.exists(abs_model_path):
+            model_path = abs_model_path
     
     # 检查是否是本地路径
     if os.path.exists(model_path):

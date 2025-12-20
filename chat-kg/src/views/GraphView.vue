@@ -12,16 +12,6 @@
       <div class="control-item">
         <label>节点数：{{ state.displayedNodes }}/{{ state.totalNodes }}</label>
       </div>
-      <div class="control-item color-legend">
-        <span class="legend-item">
-          <span class="legend-color node-low"></span>
-          <span>节点：浅色=低连接，深色=高连接</span>
-        </span>
-        <span class="legend-item">
-          <span class="legend-color edge"></span>
-          <span>边：不同颜色=不同关系类型</span>
-        </span>
-      </div>
     </div>
     <div id="graph-main" ref="chartRef"></div>
     <!-- <div id="graph-info">
@@ -57,78 +47,6 @@ const state = reactive({
 })
 
 let myChart;
-
-// 颜色调色板配置
-const COLOR_PALETTE = {
-  // 节点颜色：基于度数的渐变色（从浅到深）
-  nodeColors: [
-    '#E3F2FD', // 浅蓝 - 低度数
-    '#BBDEFB', // 浅蓝
-    '#90CAF9', // 中蓝
-    '#64B5F6', // 中蓝
-    '#42A5F5', // 蓝色
-    '#2196F3', // 标准蓝
-    '#1E88E5', // 深蓝
-    '#1976D2', // 深蓝
-    '#1565C0', // 更深蓝
-    '#0D47A1'  // 最深蓝 - 高度数
-  ],
-  // 边颜色：基于关系类型的颜色映射（使用多种颜色）
-  edgeColors: [
-    '#FF6B6B', // 红色
-    '#4ECDC4', // 青色
-    '#45B7D1', // 蓝色
-    '#FFA07A', // 浅橙
-    '#98D8C8', // 薄荷绿
-    '#F7DC6F', // 黄色
-    '#BB8FCE', // 紫色
-    '#85C1E2', // 天蓝
-    '#F8B739', // 橙色
-    '#52BE80', // 绿色
-    '#EC7063', // 粉红
-    '#5DADE2', // 亮蓝
-    '#F1948A', // 浅红
-    '#7FB3D3', // 钢蓝
-    '#AED6F1'  // 淡蓝
-  ]
-}
-
-// 根据度数获取节点颜色
-const getNodeColor = (degree, maxDegree) => {
-  if (maxDegree === 0) return COLOR_PALETTE.nodeColors[0]
-  const normalized = degree / maxDegree
-  const index = Math.min(
-    Math.floor(normalized * (COLOR_PALETTE.nodeColors.length - 1)),
-    COLOR_PALETTE.nodeColors.length - 1
-  )
-  return COLOR_PALETTE.nodeColors[index]
-}
-
-// 根据关系类型获取边颜色
-const getEdgeColor = (relationName, relationColorMap) => {
-  if (!relationName) return '#999999' // 默认灰色
-  return relationColorMap.get(relationName) || '#999999'
-}
-
-// 构建关系类型到颜色的映射
-const buildRelationColorMap = (links) => {
-  const relationSet = new Set()
-  links.forEach(link => {
-    if (link.name) {
-      relationSet.add(link.name)
-    }
-  })
-  
-  const relationArray = Array.from(relationSet)
-  const colorMap = new Map()
-  
-  relationArray.forEach((relation, index) => {
-    const colorIndex = index % COLOR_PALETTE.edgeColors.length
-    colorMap.set(relation, COLOR_PALETTE.edgeColors[colorIndex])
-  })
-  
-  return colorMap
-}
 
 const applyFilter = () => {
   if (!state.originalData) return
@@ -192,24 +110,12 @@ const updateChart = () => {
   // 找到最大度数，用于归一化
   const maxDegree = Math.max(...Object.values(nodeDegree), 1)
   
-  // 构建关系类型到颜色的映射
-  const relationColorMap = buildRelationColorMap(webkitDep.links)
-  
-  // 处理节点：调整大小、颜色和标签显示
+  // 处理节点：调整大小和标签显示
   webkitDep.nodes.forEach(function (node, idx) {
     const degree = nodeDegree[idx] || 0
     // 根据度数计算节点大小，范围在 8-30 之间
     const normalizedDegree = maxDegree > 0 ? degree / maxDegree : 0
     node.symbolSize = 8 + normalizedDegree * 22
-    
-    // 根据度数设置节点颜色
-    node.itemStyle = {
-      color: getNodeColor(degree, maxDegree),
-      borderColor: '#fff',
-      borderWidth: 2,
-      shadowBlur: degree > maxDegree * 0.5 ? 10 : 0,
-      shadowColor: 'rgba(0, 0, 0, 0.3)'
-    }
     
     // 根据度数决定是否显示标签
     const avgDegree = Object.values(nodeDegree).length > 0 
@@ -218,23 +124,11 @@ const updateChart = () => {
     node.label = {
       show: degree > avgDegree || node.symbolSize > 15,
       fontSize: 10,
-      fontWeight: degree > avgDegree * 2 ? 'bold' : 'normal',
-      color: degree > avgDegree * 2 ? '#1a1a1a' : '#666666'
+      fontWeight: degree > avgDegree * 2 ? 'bold' : 'normal'
     }
     
     // 保存度数信息用于后续使用
     node.degree = degree
-  })
-  
-  // 处理边：设置颜色和样式
-  webkitDep.links.forEach(function (link) {
-    link.lineStyle = {
-      color: getEdgeColor(link.name, relationColorMap),
-      width: 1,
-      curveness: 0.1,
-      opacity: 0.6,
-      type: 'solid'
-    }
   })
   
   const option = {
@@ -252,8 +146,6 @@ const updateChart = () => {
       formatter: (params) => {
         if (params.dataType === 'node') {
           return `${params.data.name}<br/>连接数: ${params.data.degree || 0}`
-        } else if (params.dataType === 'edge') {
-          return `关系: ${params.data.name || '未知'}`
         }
         return params.data.name
       }
@@ -286,20 +178,20 @@ const updateChart = () => {
           friction: 0.6,    // 添加摩擦力，使布局更稳定
           layoutAnimation: true  // 启用布局动画
         },
-        // 边的样式已在处理links时设置，这里不需要重复设置
+        lineStyle: {
+          color: 'source',
+          curveness: 0.1,
+          width: 0.5,  // 减小边宽度，减少视觉混乱
+          opacity: 0.6  // 降低边的不透明度
+        },
         edges: webkitDep.links,
         roam: true, // 开启鼠标缩放和平移漫游
         focusNodeAdjacency: true, // 高亮显示鼠标移入节点的邻接节点
         emphasis: {
           // 鼠标悬停时的样式
           focus: 'adjacency',
-          itemStyle: {
-            borderWidth: 3,
-            shadowBlur: 15,
-            shadowColor: 'rgba(0, 0, 0, 0.5)'
-          },
           lineStyle: {
-            width: 3,
+            width: 2,
             opacity: 1
           }
         }
@@ -405,7 +297,6 @@ onMounted(() => {
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  flex-wrap: wrap;
   
   .control-item {
     display: flex;
@@ -430,38 +321,6 @@ onMounted(() => {
       &:focus {
         outline: none;
         border-color: #4a90e2;
-      }
-    }
-    
-    &.color-legend {
-      margin-left: auto;
-      gap: 15px;
-      
-      .legend-item {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 12px;
-        color: #666;
-        
-        .legend-color {
-          display: inline-block;
-          width: 16px;
-          height: 16px;
-          border-radius: 50%;
-          border: 1px solid #ddd;
-          
-          &.node-low {
-            background: linear-gradient(90deg, #E3F2FD 0%, #0D47A1 100%);
-          }
-          
-          &.edge {
-            background: linear-gradient(90deg, #FF6B6B 0%, #52BE80 50%, #5DADE2 100%);
-            border-radius: 2px;
-            width: 20px;
-            height: 3px;
-          }
-        }
       }
     }
   }
