@@ -66,9 +66,6 @@
     <p>
       通过这些技术和方法的结合，我们的专业知识图谱检索和问答网站能够为用户提供高质量、个性化的专业领域知识服务。
     </p>
-    <footer>
-      <p>© 2023 <a href="http://iat.jiangnan.edu.cn/" target="_blank">A27 团队编号：2203574</a></p>
-    </footer>
   </div>
 </template>
 

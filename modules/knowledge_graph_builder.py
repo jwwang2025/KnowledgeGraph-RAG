@@ -2,7 +2,7 @@ import os
 import json
 import time
 from modules.prepare.preprocess import process_text
-from modules.prepare.utils import refine_knowledge_graph
+from modules.prepare.manualkg import refine_knowledge_graph
 from modules.prepare.process import uie_execute
 from modules.prepare.filter import auto_filter
 

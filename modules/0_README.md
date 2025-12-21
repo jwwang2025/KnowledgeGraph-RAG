@@ -80,46 +80,7 @@ modules/
 - `relation_align()`: 将预测结果与测试集对齐，去除重复三元组
 - `refine_and_extend()`: 精炼知识图谱并与原始数据合并
 
-### prepare/ 数据预处理模块
 
-#### `process.py`
-**作用**: 使用 PaddleNLP 的 UIE (Universal Information Extraction) 模型进行关系抽取。
-
-**主要功能**:
-- `uie_execute()`: 批量执行关系抽取，将文本转换为 SPN 格式的三元组数据
-- `rel_json()`: 将 UIE 抽取结果转换为标准三元组格式
-
-#### `preprocess.py`
-**作用**: 文本预处理，包括清洗和句子分割。
-
-**主要功能**:
-- `clean_to_sentence()`: 清洗文本，去除特殊字符，繁体转简体
-- `process_text()`: 将文本按句子分割，并控制每行最大长度（默认 480 字符）
-
-#### `filter.py`
-**作用**: 自动过滤错误的三元组。
-
-**主要功能**:
-- `auto_filter()`: 使用 BERT Tokenizer 验证实体是否在句子中存在
-  - 检查实体长度（不超过 15 个 token）
-  - 验证实体在句子中的位置
-  - 过滤掉无效的三元组
-
-#### `utils.py`
-**作用**: 知识图谱精炼工具函数。
-
-**主要功能**:
-- `refine_knowledge_graph()`: 人工筛选知识图谱
-  - 支持交互式筛选（逐条确认三元组是否正确）
-  - 支持快速模式（fast_mode=True，直接保存）
-  - 支持断点续筛
-
-#### `cprint.py`
-**作用**: 彩色打印工具，提供不同颜色的终端输出。
-
-**主要功能**:
-- 提供 `red()`, `green()`, `yellow()`, `blue()`, `purple()`, `cyan()`, `white()` 等函数
-- 用于美化控制台输出，提高代码可读性
 
 ### SPN4RE/ 关系抽取模型
 
@@ -159,14 +120,6 @@ modules/
 - `functions.py`: 通用工具函数
 - `average_meter.py`: 平均值计算器
 
-### fewshot_model/ 少样本学习模型
-
-**作用**: 少样本学习相关代码，用于在数据量较少的情况下进行关系抽取。
-
-**文件**:
-- `preprocess.py`: 少样本数据预处理
-- `process.py`: 少样本处理逻辑
-- `run_fewshot.py`: 少样本模型运行入口
 
 ### Uie-finetune/ UIE 微调
 
@@ -198,21 +151,6 @@ modules/
    - 计算扩展比例
    - 判断是否收敛
    - 保存最终知识图谱
-
-## 📝 注意事项
-
-1. **数据格式**: 所有数据采用 SPN 格式，每行一个 JSON 对象，包含：
-   - `id`: 句子 ID
-   - `sentText`: 句子文本
-   - `relationMentions`: 三元组列表，每个三元组包含 `em1Text`, `em2Text`, `label`
-
-2. **模型依赖**: 
-   - SPN4RE 需要 BERT 预训练模型（如 `bert-base-chinese`）
-   - UIE 需要 PaddleNLP 环境
-
-3. **GPU 配置**: 训练过程需要指定 GPU 设备，通过 `--gpu` 或 `--visible_gpu` 参数设置
-
-4. **断点续训**: 支持保存和加载训练状态，可以中断后继续训练
 
 ## 🔗 相关资源
 

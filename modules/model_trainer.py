@@ -3,7 +3,7 @@ import json
 import random
 import subprocess
 from modules.prepare.filter import auto_filter
-from modules.prepare.utils import refine_knowledge_graph
+from modules.prepare.manualkg import refine_knowledge_graph
 from modules.prepare import cprint as ct
 from config.settings import settings
 
