@@ -235,16 +235,6 @@ npm run server
 - 开发模式：`http://localhost:5173`（Vite默认端口）
 - 服务器模式：`http://0.0.0.0:5173`（允许局域网访问）
 
-#### 5.2 构建生产版本（可选）
-
-```bash
-# 构建生产版本
-npm run build
-
-# 预览生产版本
-npm run preview
-```
-
 ---
 
 ## 📝 使用说明
@@ -275,30 +265,6 @@ npm run preview
 
 ---
 
-## 🔍 常见问题
-
-### Q1: 模型下载失败怎么办？
-
-A: 模型文件较大，如果自动下载失败，可以手动下载：
-- ChatGLM-6B：从 [Hugging Face](https://huggingface.co/THUDM/chatglm-6b) 下载
-- UIE模型：从 [PaddleNLP](https://github.com/PaddlePaddle/PaddleNLP) 下载
-- 将模型文件放置在 `models/` 对应目录下
-
-### Q2: GPU内存不足怎么办？
-
-A: 可以尝试以下方法：
-- 使用CPU模式（不指定 `--gpu` 参数）
-- 减小批次大小（在配置文件中修改）
-- 使用模型量化版本
-
-### Q3: 前端无法连接后端？
-
-A: 检查以下几点：
-- 确认后端服务已启动
-- 检查前端配置文件中的API地址是否正确
-- 确认防火墙设置允许访问
-
----
 
 ## 📄 许可证
 
