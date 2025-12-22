@@ -251,7 +251,7 @@ const graphOption = (graph) => {
 
 const sendDeafultMessage = () => {
   setTimeout(() => {
-    appendMessage('你好？我是 ChatKG，有什么可以帮你？😊', 'received')
+    appendMessage('你好！我是 KnowledgeGraph-RAG，欢迎提问？', 'received')
   }, 1000);
 }
 
