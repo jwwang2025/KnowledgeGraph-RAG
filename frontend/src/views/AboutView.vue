@@ -1,6 +1,6 @@
 <template>
   <div class="about">
-    <img class="logo" src="/teamnum.png" alt="">
+    <h1>KnowledgeGraph-RAG</h1>
     <h2>项目简介</h2>
     <p>本项目是一个面向专业领域的本地化知识图谱检索与问答系统（RAG），将结构化知识与大模型生成能力结合，便于快速搭建领域问答与可视化应用。</p>
 
@@ -30,7 +30,7 @@
 .about {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   color: #333;
   width: 80%;
   max-width: 800px;
@@ -45,6 +45,7 @@ img.logo {
   width: 300px;
   // height: 100px;
   margin: 2rem auto;
+  align-self: center;
 }
 
 img {
@@ -54,8 +55,16 @@ img {
   border-radius: 8px;
 }
 
+h1 {
+  width: 100%;
+  text-align: center;
+  font-weight: 700;
+  margin: 1rem 0;
+}
+
 h2 {
   width: 100%;
+  text-align: left;
   font-size: 1.2rem;
   line-height: 1.2rem;
   margin: 1em 0;
@@ -64,6 +73,7 @@ h2 {
 }
 
 p {
+  text-align: left;
   font-size: 1rem;
   line-height: 1.8em;
   margin: 0.5em 0;
