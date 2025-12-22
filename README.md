@@ -1,31 +1,14 @@
 # KnowledgeGraph-RAG：知识图谱 + RAG 双驱动大模型对话系统
 
-## 项目简介
+## 🔗项目简介
 
-本项目提出一种 **“结构化知识图谱 + 非结构化文档库” 双检索驱动的检索增强生成（RAG）对话系统 **，核心目标是解决大模型在事实性问答中存在的 “幻觉” 问题，同时提升回答的可追溯性与上下文相关性。系统以知识图谱（结构化知识）和文档库（非结构化知识）为双重外部知识源，通过 RAG 技术将检索到的精准事实证据动态注入生成模型（如 ChatGLM-6B），最终实现 “有依据、可验证、高准确” 的智能对话服务。
+本项目提出一种 **“结构化知识图谱 + 非结构化文档库” 双检索驱动的检索增强生成（RAG）对话系统 **，核心目标是解决大模型在事实性问答中存在的 幻觉 问题，同时提升回答的可追溯性与上下文相关性。系统以知识图谱（结构化知识）和文档库（非结构化知识）为双重外部知识源，通过 RAG 技术将检索到的精准事实证据动态注入生成模型（ ChatGLM-6B），最终实现 有依据、可验证、高准确的智能对话服务。
 
---- 
+## 🎯 技术特性
 
-核心功能（按流程逻辑排序）
-知识图谱自动化构建：从非结构化原始文本中自动抽取实体、关系与属性，生成结构化知识图谱，为 RAG 提供精准的结构化检索载体。
-知识图谱迭代优化：通过多轮校验、补充与去重机制，持续扩展知识图谱的覆盖范围、修正错误关系，为检索环节提供高质量知识支撑。
-双源 RAG 知识增强对话：融合知识图谱的结构化检索（精准匹配实体关系）与文档库的非结构化检索（补充上下文细节），将双重证据注入大模型，生成兼具事实性与完整性的回答，并支持回答来源溯源。
-交互式可视化展示：提供直观的知识图谱可视化界面，同步展示检索到的实体关系、文档片段等证据，支持用户交互式探索知识关联、验证回答的真实性。
-核心特性（突出技术优势与价值）
-双检索源协同增强：以 “知识图谱（结构化）+ 文档库（非结构化）” 为核心，兼顾检索的精准性（实体关系匹配）与完整性（上下文补充），解决单一检索源的覆盖局限。
-自动化知识构建与迭代：无需大量人工标注，从原始文本自动生成知识图谱，并通过迭代机制持续优化，降低知识工程成本，提升知识更新效率。
-可追溯的事实性生成：所有回答均关联明确的检索证据（知识图谱三元组 / 文档片段），支持 “答案 - 证据” 双向溯源，彻底解决大模型 “幻觉” 问题，满足学术、专业场景的可信度要求。
-上下文感知的智能对话：在 RAG 框架基础上保留大模型的上下文理解能力，支持多轮对话中的逻辑连贯与多步推理，兼顾事实准确性与交互自然性。
-交互式知识验证：通过可视化界面直观呈现知识图谱的实体关联与检索证据链，用户可手动探索知识结构、校验回答依据，增强系统的透明性与可信任度。
----
-
-## 技术栈
-
-**后端**
-- Python 3.x、Flask（API 服务）  
-- PyTorch、Transformers（模型推理与微调）  
-- PaddlePaddle / PaddleNLP（UIE 模型支持）  
-- SPN4RE（关系抽取）
+1. **UIE 抽取**：高效完成实体、关系、属性的自动化抽取。
+2. **SPN4RE**：提升关系三元组抽取的精度与效率。
+3. **双源 RAG 检索增强**：核心技术支撑，融合知识图谱结构化检索与文档库非结构化检索。
 
 
 ## 🛠️ 技术栈
@@ -46,17 +29,20 @@
 - **Vite**：构建工具
 
 ---
-## 系统流程
+## ✨系统流程
+
 ![alt text](proj-docs/structure.png)
 
+## 📺系统展示
 
-## 问答页面（无检索增强）
+### 问答页面（无检索增强）
+
 ![alt text](proj-docs/QAPagenG.png)
 
-## 问答页面（有检索增强）
+### 问答页面（有检索增强）
 ![alt text](proj-docs/QAPagewG.png)
 
-## 图谱页面
+### 图谱页面
 ![alt text](proj-docs/graphPage.png)
 
 ## 📁 项目结构
@@ -65,31 +51,31 @@
 KnowledgeGraph-RAG/
 ├── main.py                    # 主入口：知识图谱构建流程
 ├── config/                    # 配置文件
-│   └── settings.py           # 项目配置
-├── server/                    # Flask后端服务
-│   ├── main.py               # 服务启动入口
-│   └── app/                   # Flask应用
-│       ├── views/            # API路由（chat.py, graph.py）
-│       └── utils/            # 工具函数（chat_glm.py, graph_utils.py等）
-├── modules/                   # 核心模块
-│   ├── knowledge_graph_builder.py  # 知识图谱构建器（核心类）
-│   ├── model_trainer.py      # 模型训练器
-│   ├── prepare/              # 数据预处理模块
-│   ├── SPN4RE/               # 关系抽取模型（Set Prediction Network）
-│   └── Uie-finetune/         # UIE模型微调相关
-├── data/                      # 数据目录
-│   ├── raw_data/             # 原始文本数据
-│   └── project_v1/           # 项目数据（知识图谱、迭代结果等）
-│       └── history/          # 检查点历史记录
-├── models/                    # 模型文件
-│   ├── chatglm-6b/          # ChatGLM-6B模型
-│   ├── uie-base/            # UIE模型
-│   └── bert-base-chinese/   # BERT中文模型
-├── chat-kg/                   # 前端Vue应用
-│   ├── src/                  # 源代码
-│   └── package.json          # 前端依赖配置
+│   └── settings.py            # 项目配置
+├── backend/                   # 后端服务与 API（Flask）
+│   ├── main.py                # 后端服务入口
+│   └── app/                   # Flask 应用（views, utils）
+│       ├── views/             # API 路由（chat.py, graph.py）
+│       └── utils/             # 工具函数（chat_glm.py, graph_utils.py 等）
+├── modules/                   # 核心模块（知识图谱构建、模型训练等）
+│   ├── knowledge_graph_builder.py
+│   ├── model_trainer.py
+│   └── prepare/               # 数据预处理
+├── data/                      # 数据目录（原始数据与项目迭代数据）
+│   └── project_v1/
+│       └── history/           # 检查点历史记录
+├── frontend/                  # 前端 Vue 应用（可视化界面）
+│   ├── index.html
+│   └── src/
+├── models/                    # 模型文件与预训练权重
+│   ├── chatglm-6b/            # ChatGLM-6B 模型权重与实现
+│   ├── uie-base/              # UIE 模型与权重（信息抽取）
+│   └── bert-base-chinese/     # BERT 中文模型及词表
 ├── utils/                     # 工具脚本
-└── requirements.txt           # Python依赖列表
+├── README.md
+├── requirements.txt
+├── package-lock.json
+└── other files (e.g. public/, frontend/package.json, etc.)
 ```
 
 ---
@@ -101,39 +87,19 @@ KnowledgeGraph-RAG/
 #### 1.1 系统要求
 
 - Python 3.8+
-- Node.js 16+（如需运行前端）
-- CUDA支持的GPU（推荐，用于模型推理）
+- Node.js 16+
 
 #### 1.2 安装Python依赖
 
 ```bash
-# 在项目根目录执行
-pip install -r requirements.txt
-```
-
-**注意**：如果遇到依赖冲突，建议使用虚拟环境：
-
-```bash
-# 创建虚拟环境
-python -m venv venv
-
-# 激活虚拟环境
-# Windows
-venv\Scripts\activate
-# Linux/Mac
-source venv/bin/activate
-
-# 安装依赖
 pip install -r requirements.txt
 ```
 
 #### 1.3 安装前端依赖（可选）
 
-如需运行前端可视化界面，需要安装Node.js依赖：
-
 ```bash
 # 进入前端目录
-cd chat-kg
+cd frontend
 
 # 安装依赖
 npm install
@@ -153,17 +119,6 @@ cd ..
 **数据格式要求：**
 - 纯文本格式（.txt）
 - 每段文本建议包含完整的语义信息
-- 支持中文和英文文本
-
-如果文件不存在，需要创建该文件并添加文本内容：
-
-```bash
-# 创建数据目录（如果不存在）
-mkdir -p data/raw_data
-
-# 编辑或创建 raw_data.txt 文件
-# 添加你的原始文本数据
-```
 
 ---
 
@@ -204,22 +159,13 @@ python main.py --project project_v1 --resume data/project_v1/history/20230327-00
 **参数说明：**
 - `--resume <检查点路径>`：从指定检查点恢复运行
 
-**检查点文件命名格式：** `YYYYMMDD-HHMMSS_iter_v<版本号>.json`
-
 ---
 
 ### 第四步：启动后端服务
 
-#### 4.1 配置环境变量（可选）
+#### 4.1 配置环境变量
 
-在项目根目录创建 `.env` 文件，配置服务器参数：
-
-```env
-SERVER_HOST=0.0.0.0
-SERVER_PORT=5000
-DEBUG=False
-SECRET_KEY=your-secret-key-here
-```
+在项目根目录创建 `.env` 文件，配置服务器参数。
 
 #### 4.2 启动Flask服务
 
@@ -231,7 +177,7 @@ python main.py
 
 **服务启动后：**
 - 后端API服务默认运行在 `http://localhost:5000`
-- 首次启动会自动加载ChatGLM-6B模型（需要一些时间）
+- 首次启动会自动加载ChatGLM-6B模型
 - 确保已构建知识图谱，否则对话功能可能无法正常工作
 
 **API端点：**
@@ -240,7 +186,7 @@ python main.py
 
 ---
 
-### 第五步：启动前端应用（可选）
+### 第五步：启动前端应用
 
 #### 5.1 启动前端开发服务器
 
@@ -248,9 +194,7 @@ python main.py
 # 进入前端目录
 cd chat-kg
 
-# 启动开发服务器
-npm run dev
-# 或使用服务器模式（允许外部访问）
+# 启动服务器
 npm run server
 ```
 
@@ -259,7 +203,6 @@ npm run server
 - 服务器模式：`http://0.0.0.0:5173`（允许局域网访问）
 
 ---
-
 
 
 
