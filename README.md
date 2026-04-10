@@ -11,6 +11,7 @@
 3. **双源 RAG 检索增强**：核心技术支撑，融合知识图谱结构化检索与文档库非结构化检索。
 4. **Adaptive-RAG 智能路由**：根据问题类型自适应选择检索策略和知识源。
 5. **Self-RAG 结果评估**：评估检索结果相关性，智能过滤低质量内容。
+6. **CoT 思维链推理**：支持 Zero-shot / Few-shot / Self-Consistency 多种推理模式。
 
 
 ## 🛠️ 技术栈
@@ -86,6 +87,32 @@
 └─────────────────┘
 ```
 
+### CoT 思维链核心特性
+
+```
+用户问题
+    │
+    ▼
+┌─────────────────┐
+│  CoTReasoner    │  ← 根据问题类型选择 CoT 模式
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  问题分解       │  ← 将复杂问题分解为子问题
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  逐步推理       │  ← 基于知识上下文进行推理
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  结论综合       │  ← 整合推理步骤生成最终答案
+└─────────────────┘
+```
+
 **评估维度：**
 - 语义匹配度：查询与结果的内容相似度
 - 实体匹配度：查询实体在结果中的出现情况
@@ -99,6 +126,58 @@
 | 知识源选择 | 全部检索 | 按需选择 |
 | 结果质量 | 全部使用 | 智能过滤 |
 | 检索决策 | 盲目检索 | 反思决策 |
+
+---
+
+## 🧩 CoT 思维链模块
+
+本项目集成了 CoT (Chain of Thought) 思维链推理，增强模型的推理能力。
+
+### CoT 工作原理
+
+```
+问题 → 分解子问题 → 逐步推理 → 综合结论
+```
+
+### CoT 模式
+
+| 模式 | 说明 | 适用场景 |
+|------|------|----------|
+| **Zero-shot CoT** | "让我们一步步思考" 引导推理 | 通用推理 |
+| **Few-shot CoT** | 基于示例学习推理模式 | 复杂概念 |
+| **Self-Consistency** | 多路径推理取最优 | 需要准确性的问题 |
+
+### CoT Prompt 示例
+
+**Zero-shot CoT:**
+```
+===参考资料===
+{知识内容}
+
+===问题===
+{用户问题}
+
+===要求===
+请按以下步骤思考并回答：
+1. 理解问题：分析这个问题的核心是什么
+2. 检索信息：从参考资料中提取相关信息
+3. 逻辑推理：基于信息进行推理
+4. 给出答案：综合以上得出最终答案
+
+请一步步思考：
+```
+
+### CoT 在项目中的应用
+
+问题类型 → CoT 模式映射:
+
+| 问题类型 | CoT 模式 | 原因 |
+|----------|----------|------|
+| 比较类 | self_consistency | 需要多角度分析 |
+| 解释类 | few_shot | 需要示例引导 |
+| 分析类 | self_consistency | 需要深度推理 |
+| 事实类 | zero_shot | 简单直接推理 |
+| 闲聊 | direct | 无需推理 |
 
 ## 📺系统展示
 
@@ -128,7 +207,8 @@ KnowledgeGraph-RAG/
 │           ├── query_router.py         # Adaptive-RAG：问题路由
 │           ├── retrieval_decider.py     # Adaptive-RAG：检索决策
 │           ├── result_evaluator.py      # Self-RAG：结果评估
-│           ├── adaptive_rag_engine.py   # Adaptive+Self-RAG 核心引擎
+│           ├── cot_reasoner.py          # CoT：思维链推理 (新增)
+│           ├── adaptive_rag_engine.py   # Adaptive+Self+CoT 核心引擎
 │           ├── vector_searcher.py       # 向量数据库检索
 │           ├── graph_utils.py           # 知识图谱工具
 │           ├── ner.py                   # 命名实体识别
@@ -206,7 +286,7 @@ print(f"高质量结果数: {report.high_relevant_count}")
 
 ### 4. adaptive_rag_engine.py - 核心引擎
 
-融合 Adaptive-RAG + Self-RAG 的智能问答引擎：
+融合 Adaptive-RAG + Self-RAG + CoT 的智能问答引擎：
 
 ```python
 from app.utils.adaptive_rag_engine import AdaptiveRAGEngine
@@ -214,14 +294,40 @@ from app.utils.adaptive_rag_engine import AdaptiveRAGEngine
 engine = AdaptiveRAGEngine(
     project_name="project_v1",
     enable_evaluation=True,     # 启用 Self-RAG 评估
-    enable_iteration=False      # 可选：启用迭代检索
+    enable_iteration=False,     # 可选：启用迭代检索
+    enable_cot=True,           # 启用 CoT 思维链
+    default_cot_mode="zero_shot"  # 默认 Zero-shot CoT 模式
 )
 
 context = engine.process("人工智能的发展历史")
 print(f"问题类型: {context.retrieval_plan.question_type}")
 print(f"检索结果: {context.retrieval_result.total_sources_used} 个知识源")
 print(f"评估结果: {context.evaluation_report.overall_relevance}")
+print(f"CoT 推理: {context.reasoning_chain}")
 print(f"最终 Prompt: {context.assembled_prompt[:100]}...")
+```
+
+### 5. cot_reasoner.py - CoT 思维链推理器
+
+提供多种思维链推理模式：
+
+```python
+from app.utils.cot_reasoner import CoTReasoner, CoTMode
+
+# Zero-shot CoT
+reasoner = CoTReasoner(mode=CoTMode.ZERO_SHOT)
+prompt = reasoner.build_cot_prompt("什么是人工智能？", knowledge)
+print(prompt)
+
+# Few-shot CoT
+reasoner = CoTReasoner(mode=CoTMode.FEW_SHOT)
+prompt = reasoner.build_cot_prompt("AI和机器学习的区别？", knowledge)
+
+# Self-Consistency
+reasoner = CoTReasoner(mode=CoTMode.SELF_CONSISTENCY)
+chain = reasoner.reason("复杂分析问题", knowledge, depth=2)
+print(f"推理步骤: {len(chain.steps)}")
+print(f"一致性得分: {chain.consistency_score}")
 ```
 
 ---

@@ -1,12 +1,13 @@
 """
 Adaptive-RAG 核心编排引擎
-融合 Adaptive-RAG 和 Self-RAG 思想，实现智能问答
+融合 Adaptive-RAG、Self-RAG 和 CoT 思维链，实现智能问答
 
 核心流程:
 1. QueryRouter - 分析问题类型，决定检索策略
 2. RetrievalDecider - 执行多源自适应检索
 3. ResultEvaluator - 评估检索结果的相关性
-4. PromptAssembler - 组装增强后的 prompt
+4. CoTReasoner - 构建思维链 prompt
+5. PromptAssembler - 组装增强后的 prompt
 """
 
 import time
@@ -19,6 +20,7 @@ from enum import Enum
 from .query_router import QueryRouter, QuestionType, RetrievalPlan
 from .retrieval_decider import RetrievalDecider, MultiSourceRetrievalResult, RetrievalStatus
 from .result_evaluator import ResultEvaluator, EvaluationReport, ActionDecision, RelevanceLevel
+from .cot_reasoner import CoTReasoner, CoTMode, ReasoningChain
 from config.settings import settings
 
 
@@ -28,6 +30,7 @@ class ProcessStage(Enum):
     ROUTING = "routing"
     RETRIEVING = "retrieving"
     EVALUATING = "evaluating"
+    REASONING = "reasoning"  # 新增: CoT 推理阶段
     ASSEMBLING = "assembling"
     GENERATING = "generating"
     COMPLETED = "completed"
@@ -57,6 +60,10 @@ class RetrievalContext:
     
     # 评估阶段
     evaluation_report: Optional[EvaluationReport] = None
+    
+    # CoT 推理阶段 (新增)
+    reasoning_chain: Optional[ReasoningChain] = None
+    cot_prompt: str = ""
     
     # 组装阶段
     assembled_prompt: str = ""
@@ -90,15 +97,17 @@ class RetrievalContext:
             "total_time": f"{self.total_time:.2f}s",
             "use_retrieval": self.use_retrieval,
             "final_action": self.final_action.value,
+            "use_cot": self.retrieval_plan.use_cot if self.retrieval_plan else False,
+            "cot_mode": self.retrieval_plan.cot_mode if self.retrieval_plan else "direct",
             "has_error": self.error is not None
         }
 
 
 class AdaptiveRAGEngine:
     """
-    Adaptive-RAG 核心引擎
+    Adaptive-RAG + Self-RAG + CoT 核心引擎
     
-    融合 Adaptive-RAG 和 Self-RAG 的智能问答引擎
+    融合三种先进思想的智能问答引擎:
     
     Adaptive-RAG 思想:
     - 问题路由: 分析问题类型，决定检索策略
@@ -109,21 +118,30 @@ class AdaptiveRAGEngine:
     - 结果评估: 评估每条检索结果的相关性
     - 反思决策: 决定是否使用检索结果
     - 质量控制: 只使用高质量的检索结果
+    
+    CoT (Chain of Thought) 思想:
+    - Zero-shot CoT: "让我们一步步思考"引导推理
+    - Few-shot CoT: 基于示例的推理学习
+    - Self-Consistency: 多路径推理取最优
     """
     
     def __init__(self, project_name: str = "project_v1",
                  vector_db_path: str = "./data/vector_db",
                  enable_evaluation: bool = True,
                  enable_iteration: bool = False,
+                 enable_cot: bool = True,
+                 default_cot_mode: str = "zero_shot",
                  max_iterations: int = 2):
         """
-        初始化 Adaptive-RAG 引擎
+        初始化引擎
         
         Args:
             project_name: 项目名称
             vector_db_path: 向量数据库路径
             enable_evaluation: 是否启用结果评估 (Self-RAG)
             enable_iteration: 是否启用迭代检索 (Adaptive-RAG)
+            enable_cot: 是否启用思维链 (CoT)
+            default_cot_mode: 默认 CoT 模式 (zero_shot, few_shot, self_consistency)
             max_iterations: 最大迭代次数
         """
         # 组件初始化
@@ -133,6 +151,11 @@ class AdaptiveRAGEngine:
             vector_db_path=vector_db_path
         )
         self.result_evaluator = ResultEvaluator() if enable_evaluation else None
+        
+        # CoT 思维链推理器 (新增)
+        self.enable_cot = enable_cot
+        self.default_cot_mode = default_cot_mode
+        self._cot_reasoner: Optional[CoTReasoner] = None
         
         # 配置
         self.enable_evaluation = enable_evaluation
@@ -147,8 +170,25 @@ class AdaptiveRAGEngine:
             "total_queries": 0,
             "avg_retrieval_time": 0,
             "avg_evaluation_time": 0,
+            "avg_cot_time": 0,
+            "cot_usage_count": 0,
             "retrieval_source_counts": {}
         }
+    
+    @property
+    def cot_reasoner(self) -> CoTReasoner:
+        """延迟加载 CoT 推理器"""
+        if self._cot_reasoner is None:
+            mode_map = {
+                "zero_shot": CoTMode.ZERO_SHOT,
+                "few_shot": CoTMode.FEW_SHOT,
+                "self_consistency": CoTMode.SELF_CONSISTENCY,
+                "direct": CoTMode.DIRECT
+            }
+            self._cot_reasoner = CoTReasoner(
+                mode=mode_map.get(self.default_cot_mode, CoTMode.ZERO_SHOT)
+            )
+        return self._cot_reasoner
     
     def process(self, query: str, history: List[tuple] = None) -> RetrievalContext:
         """
@@ -221,7 +261,17 @@ class AdaptiveRAGEngine:
             else:
                 context.final_action = ActionDecision.USE_RETRIEVAL
             
-            # 4. 阶段: Prompt 组装
+            # 4. 阶段: CoT 思维链推理 (新增)
+            if self.enable_cot and context.retrieval_plan.use_cot:
+                context.add_stage(ProcessStage.REASONING)
+                stage_start = time.time()
+                self._apply_cot_reasoning(context)
+                context.add_stage(ProcessStage.REASONING, time.time() - stage_start)
+                
+                self.logger.info(f"[CoT] 模式: {context.retrieval_plan.cot_mode}, "
+                               f"推理链长度: {len(context.reasoning_chain.steps) if context.reasoning_chain else 0}")
+            
+            # 5. 阶段: Prompt 组装
             context.add_stage(ProcessStage.ASSEMBLING)
             stage_start = time.time()
             self._assemble_prompt(context)
@@ -242,6 +292,38 @@ class AdaptiveRAGEngine:
             context.total_time = time.time() - start_time
             self.logger.error(f"[错误] 处理查询时出错: {e}")
             return context
+    
+    def _apply_cot_reasoning(self, context: RetrievalContext):
+        """应用 CoT 思维链推理"""
+        if not context.retrieval_plan.use_cot:
+            return
+        
+        # 根据路由决定 CoT 模式
+        cot_mode_str = context.retrieval_plan.cot_mode
+        
+        # 创建对应模式的 CoT 推理器
+        mode_map = {
+            "zero_shot": CoTMode.ZERO_SHOT,
+            "few_shot": CoTMode.FEW_SHOT,
+            "self_consistency": CoTMode.SELF_CONSISTENCY,
+            "direct": CoTMode.DIRECT
+        }
+        
+        cot_mode = mode_map.get(cot_mode_str, CoTMode.ZERO_SHOT)
+        reasoner = CoTReasoner(mode=cot_mode)
+        
+        # 执行推理
+        context.reasoning_chain = reasoner.reason(
+            query=context.query,
+            knowledge_context=context.knowledge_context,
+            depth=context.retrieval_plan.reasoning_depth
+        )
+        
+        # 生成 CoT prompt
+        context.cot_prompt = reasoner.build_cot_prompt(
+            query=context.query,
+            knowledge=context.knowledge_context
+        )
     
     def _iterate_retrieval(self, context: RetrievalContext) -> RetrievalContext:
         """
@@ -275,7 +357,9 @@ class AdaptiveRAGEngine:
                 max_docs=int(original_plan.max_docs * 1.5),
                 reasoning_depth=min(original_plan.reasoning_depth + 1, 2),
                 need_iterative=False,  # 避免无限循环
-                confidence=original_plan.confidence
+                confidence=original_plan.confidence,
+                use_cot=original_plan.use_cot,
+                cot_mode=original_plan.cot_mode
             )
             
             # 重新检索
@@ -328,10 +412,20 @@ class AdaptiveRAGEngine:
         return new_priority
     
     def _assemble_prompt(self, context: RetrievalContext):
-        """组装最终的 prompt"""
+        """组装最终的 prompt (集成 CoT)"""
         if not context.use_retrieval or context.final_action == ActionDecision.GENERATE_DIRECT:
-            context.assembled_prompt = context.query
+            # 无检索情况下的 prompt
+            if self.enable_cot:
+                # 使用 CoT 推理器生成 prompt
+                context.assembled_prompt = context.cot_prompt or context.query
+            else:
+                context.assembled_prompt = context.query
             context.knowledge_context = ""
+            return
+        
+        # 如果已经有 CoT prompt，使用它
+        if context.cot_prompt:
+            context.assembled_prompt = context.cot_prompt
             return
         
         # 获取检索结果
@@ -369,8 +463,16 @@ class AdaptiveRAGEngine:
         # 组装知识上下文
         context.knowledge_context = "；".join(context_parts)
         
-        # 组装最终 prompt
-        if context.knowledge_context:
+        # 检查是否启用 CoT
+        if self.enable_cot and context.retrieval_plan and context.retrieval_plan.use_cot:
+            # 使用 CoT 模式组装 prompt
+            reasoner = self.cot_reasoner
+            context.assembled_prompt = reasoner.build_cot_prompt(
+                query=context.query,
+                knowledge=context.knowledge_context
+            )
+        elif context.knowledge_context:
+            # 普通模式 (无 CoT)
             context.assembled_prompt = (
                 f"\n===参考资料===\n{context.knowledge_context}；\n\n"
                 f"根据上面资料，用简洁且准确的话回答下面问题：\n{context.query}"
@@ -404,6 +506,16 @@ class AdaptiveRAGEngine:
             self.stats["avg_evaluation_time"] = (
                 (current_avg * (n - 1) + eval_time) / n
             )
+        
+        # CoT 统计
+        if context.reasoning_chain:
+            self.stats["cot_usage_count"] = self.stats.get("cot_usage_count", 0) + 1
+            reason_time = context.stage_times.get(ProcessStage.REASONING.value, 0)
+            current_avg = self.stats["avg_cot_time"]
+            n = self.stats["total_queries"]
+            self.stats["avg_cot_time"] = (
+                (current_avg * (n - 1) + reason_time) / n
+            )
     
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""
@@ -415,6 +527,8 @@ class AdaptiveRAGEngine:
             "total_queries": 0,
             "avg_retrieval_time": 0,
             "avg_evaluation_time": 0,
+            "avg_cot_time": 0,
+            "cot_usage_count": 0,
             "retrieval_source_counts": {}
         }
 

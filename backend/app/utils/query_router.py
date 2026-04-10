@@ -46,7 +46,11 @@ class RetrievalPlan:
     max_docs: int                          # 最大文档数量
     reasoning_depth: int                   # 推理深度 (0=无需推理, 1=简单推理, 2=深度推理)
     need_iterative: bool                   # 是否需要迭代检索
-    confidence: float                       # 分类置信度
+    confidence: float                      # 分类置信度
+    
+    # CoT 思维链配置 (新增)
+    use_cot: bool = False                 # 是否启用思维链
+    cot_mode: str = "zero_shot"           # CoT 模式: zero_shot, few_shot, self_consistency
 
 
 class QueryRouter:
@@ -92,7 +96,9 @@ class QueryRouter:
                 max_docs=0,
                 reasoning_depth=0,
                 need_iterative=False,
-                confidence=0.95
+                confidence=0.95,
+                use_cot=False,
+                cot_mode="direct"
             )
         
         # 2. 判断问题类型
@@ -109,7 +115,10 @@ class QueryRouter:
         # 5. 决定是否需要迭代检索
         need_iterative = self._check_iterative_need(question_type, query_clean)
         
-        # 6. 调整检索数量限制
+        # 6. 决定 CoT 思维链模式
+        use_cot, cot_mode = self._decide_cot_mode(question_type, reasoning_depth, query_clean)
+        
+        # 7. 调整检索数量限制
         max_triples = self._adjust_max_triples(question_type, self.max_triples)
         max_docs = self._adjust_max_docs(question_type, self.max_docs)
         
@@ -122,7 +131,9 @@ class QueryRouter:
             max_docs=max_docs,
             reasoning_depth=reasoning_depth,
             need_iterative=need_iterative,
-            confidence=confidence
+            confidence=confidence,
+            use_cot=use_cot,
+            cot_mode=cot_mode
         )
     
     def _check_if_need_retrieval(self, query: str, query_lower: str) -> tuple:
@@ -318,6 +329,33 @@ class QueryRouter:
             return min(base_depth + 1, 2)
         
         return base_depth
+    
+    def _decide_cot_mode(self, question_type: QuestionType, reasoning_depth: int,
+                        query: str) -> tuple:
+        """
+        决定 CoT 思维链模式
+        
+        Returns:
+            (use_cot: bool, cot_mode: str)
+        """
+        # 无需推理的问题不启用 CoT
+        if reasoning_depth == 0:
+            return False, "direct"
+        
+        # 复杂问题启用深度 CoT
+        if question_type in [QuestionType.COMPLEX, QuestionType.ANALYSIS, QuestionType.COMPARISON]:
+            return True, "self_consistency"
+        
+        # 解释类问题启用 Few-shot CoT (需要示例引导)
+        if question_type == QuestionType.EXPLANATION:
+            return True, "few_shot"
+        
+        # 需要深度推理的问题启用 Zero-shot CoT
+        if reasoning_depth >= 2:
+            return True, "zero_shot"
+        
+        # 默认启用简单的 Zero-shot CoT
+        return True, "zero_shot"
     
     def _check_iterative_need(self, question_type: QuestionType, query: str) -> bool:
         """

@@ -1,10 +1,11 @@
 """
-ChatGLM 模型调用与 Adaptive-RAG 集成模块
+ChatGLM 模型调用与 Adaptive-RAG + Self-RAG + CoT 集成模块
 
 本模块整合了:
 1. ChatGLM-6B 模型调用
 2. Adaptive-RAG 智能检索增强
 3. Self-RAG 结果评估与反思
+4. CoT 思维链推理
 
 支持流式输出，实时返回对话状态
 """
@@ -28,7 +29,7 @@ rag_engine = None
 
 
 def init_rag_engine():
-    """初始化 Adaptive-RAG 引擎"""
+    """初始化 Adaptive-RAG + CoT 引擎"""
     global rag_engine
     if rag_engine is None:
         from app.utils.adaptive_rag_engine import AdaptiveRAGEngine
@@ -36,7 +37,9 @@ def init_rag_engine():
             project_name="project_v1",
             vector_db_path="./data/vector_db",
             enable_evaluation=True,    # 启用 Self-RAG 评估
-            enable_iteration=False     # 可选：启用迭代检索
+            enable_iteration=False,   # 可选：启用迭代检索
+            enable_cot=True,         # 启用 CoT 思维链
+            default_cot_mode="zero_shot"  # 默认 Zero-shot CoT 模式
         )
     return rag_engine
 
@@ -60,15 +63,17 @@ def predict(user_input: str, history: List[Tuple[str, str]] = None) -> Tuple[str
 
 def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
                    use_adaptive_rag: bool = True,
-                   enable_evaluation: bool = True) -> Generator[bytes, None, None]:
+                   enable_evaluation: bool = True,
+                   enable_cot: bool = True) -> Generator[bytes, None, None]:
     """
-    流式对话预测 (集成 Adaptive-RAG)
+    流式对话预测 (集成 Adaptive-RAG + Self-RAG + CoT)
 
     Args:
         user_input: 用户输入
         history: 对话历史
         use_adaptive_rag: 是否使用 Adaptive-RAG (默认 True)
         enable_evaluation: 是否启用结果评估 (默认 True)
+        enable_cot: 是否启用思维链 CoT (默认 True)
 
     Yields:
         JSON 编码的流式响应
@@ -111,7 +116,11 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
                 "total_time": f"{context.total_time:.2f}s",
                 "stages": context.stage_history,
                 "final_action": context.final_action.value,
-                "use_retrieval": context.use_retrieval
+                "use_retrieval": context.use_retrieval,
+                # CoT 相关元数据
+                "use_cot": context.retrieval_plan.use_cot if context.retrieval_plan else False,
+                "cot_mode": context.retrieval_plan.cot_mode if context.retrieval_plan else "direct",
+                "reasoning_depth": context.retrieval_plan.reasoning_depth if context.retrieval_plan else 0
             }
             
             # 添加检索上下文到返回数据
@@ -121,12 +130,24 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
                 "docs_count": len(context.retrieval_result.documents) if context.retrieval_result else 0,
                 "has_wiki": context.retrieval_result.wiki_summary is not None if context.retrieval_result else False,
                 "has_image": context.retrieval_result.image_url is not None if context.retrieval_result else False,
+                # CoT 信息
+                "use_cot": context.retrieval_plan.use_cot if context.retrieval_plan else False,
+                "cot_mode": context.retrieval_plan.cot_mode if context.retrieval_plan else "direct",
+                "reasoning_steps": len(context.reasoning_chain.steps) if context.reasoning_chain else 0
             }
             
             # 添加评估报告 (如果启用)
             if enable_evaluation and context.evaluation_report:
                 base_result["evaluation"] = context.evaluation_report.get_summary()
                 base_result["metadata"]["evaluation"] = context.evaluation_report.get_summary()
+            
+            # 添加 CoT 推理链信息到元数据
+            if context.reasoning_chain and enable_cot:
+                base_result["metadata"]["cot"] = {
+                    "mode": context.reasoning_chain.mode.value,
+                    "steps": len(context.reasoning_chain.steps),
+                    "depth": context.reasoning_chain.depth
+                }
             
             # 添加到元数据
             base_result["metadata"]["rag"] = rag_metadata
@@ -136,6 +157,8 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
                 chat_input = context.assembled_prompt
                 use_retrieval = True
                 print(f"[Adaptive-RAG] 使用检索增强，问题类型: {rag_metadata['question_type']}")
+                if rag_metadata["use_cot"]:
+                    print(f"[CoT] 启用思维链推理，模式: {rag_metadata['cot_mode']}")
             else:
                 print(f"[Adaptive-RAG] 无需检索，直接生成")
                 
