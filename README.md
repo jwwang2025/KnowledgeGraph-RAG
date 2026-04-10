@@ -9,6 +9,8 @@
 1. **UIE 抽取**：高效完成实体、关系、属性的自动化抽取。
 2. **SPN4RE**：提升关系三元组抽取的精度与效率。
 3. **双源 RAG 检索增强**：核心技术支撑，融合知识图谱结构化检索与文档库非结构化检索。
+4. **Adaptive-RAG 智能路由**：根据问题类型自适应选择检索策略和知识源。
+5. **Self-RAG 结果评估**：评估检索结果相关性，智能过滤低质量内容。
 
 
 ## 🛠️ 技术栈
@@ -33,6 +35,71 @@
 
 ![alt text](proj-docs/structure.png)
 
+## 🧠 Adaptive-RAG + Self-RAG 架构
+
+本项目融合了 Adaptive-RAG 和 Self-RAG 的先进思想，实现更智能的检索增强生成：
+
+### Adaptive-RAG 核心特性
+
+```
+用户问题
+    │
+    ▼
+┌─────────────────┐
+│   QueryRouter   │  ← 问题路由：分析问题类型（事实型、定义型、比较型等）
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ RetrievalDecider │  ← 检索决策：根据问题类型自适应选择知识源和检索深度
+└────────┬────────┘
+         │
+    ┌────┴────┬────────┬──────┐
+    ▼        ▼        ▼      ▼
+  知识图谱  向量库   Wiki   图像
+```
+
+**问题路由智能分类：**
+- 事实型问题 → 优先知识图谱 + 向量库
+- 定义类问题 → 优先 Wikipedia + 向量库
+- 比较类问题 → 多源检索 + 深度推理
+- 闲聊/数学 → 无需检索，直接生成
+
+### Self-RAG 核心特性
+
+```
+检索结果
+    │
+    ▼
+┌─────────────────┐
+│ ResultEvaluator │  ← 结果评估：评估每条结果的相关性、完整性
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│   Relevance     │  ← 相关性评分：HIGH / MEDIUM / LOW / IRRELEVANT
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ ActionDecision  │  ← 行动决策：使用检索 / 直接生成 / 迭代检索
+└─────────────────┘
+```
+
+**评估维度：**
+- 语义匹配度：查询与结果的内容相似度
+- 实体匹配度：查询实体在结果中的出现情况
+- 完整性评估：三元组/文档的信息完整程度
+
+### 流程对比
+
+| 特性 | 传统 RAG | Adaptive-RAG + Self-RAG |
+|------|----------|-------------------------|
+| 检索触发 | 固定流程 | 自适应判断 |
+| 知识源选择 | 全部检索 | 按需选择 |
+| 结果质量 | 全部使用 | 智能过滤 |
+| 检索决策 | 盲目检索 | 反思决策 |
+
 ## 📺系统展示
 
 ### 问答页面（无检索增强）
@@ -56,7 +123,17 @@ KnowledgeGraph-RAG/
 │   ├── main.py                # 后端服务入口
 │   └── app/                   # Flask 应用（views, utils）
 │       ├── views/             # API 路由（chat.py, graph.py）
-│       └── utils/             # 工具函数（chat_glm.py, graph_utils.py 等）
+│       └── utils/             # 工具函数
+│           ├── chat_glm.py              # ChatGLM 调用（集成 RAG）
+│           ├── query_router.py         # Adaptive-RAG：问题路由
+│           ├── retrieval_decider.py     # Adaptive-RAG：检索决策
+│           ├── result_evaluator.py      # Self-RAG：结果评估
+│           ├── adaptive_rag_engine.py   # Adaptive+Self-RAG 核心引擎
+│           ├── vector_searcher.py       # 向量数据库检索
+│           ├── graph_utils.py           # 知识图谱工具
+│           ├── ner.py                   # 命名实体识别
+│           ├── query_wiki.py            # Wikipedia 搜索
+│           └── image_searcher.py       # 图像搜索
 ├── modules/                   # 核心模块（知识图谱构建、模型训练等）
 │   ├── knowledge_graph_builder.py
 │   ├── model_trainer.py
@@ -76,6 +153,75 @@ KnowledgeGraph-RAG/
 ├── requirements.txt
 ├── package-lock.json
 └── other files (e.g. public/, frontend/package.json, etc.)
+```
+
+---
+
+## 🗝️ 新增 RAG 模块说明
+
+### 1. query_router.py - 问题路由器
+
+分析用户问题，决定检索策略：
+
+```python
+from app.utils.query_router import QueryRouter
+
+router = QueryRouter()
+plan = router.route("什么是人工智能？")
+
+print(f"问题类型: {plan.question_type}")      # QuestionType.DEFINITION
+print(f"知识源: {plan.priority_sources}")      # ['wiki', 'vector']
+print(f"需要检索: {plan.need_retrieval}")     # True
+```
+
+### 2. retrieval_decider.py - 检索决策器
+
+执行多源自适应检索：
+
+```python
+from app.utils.retrieval_decider import RetrievalDecider
+
+decider = RetrievalDecider(project_name="project_v1")
+result = decider.retrieve("人工智能是谁发明的？", plan)
+
+print(f"三元组: {result.triples}")
+print(f"文档: {result.documents}")
+print(f"Wikipedia: {result.wiki_summary}")
+```
+
+### 3. result_evaluator.py - 结果评估器
+
+评估检索结果的相关性（Self-RAG）：
+
+```python
+from app.utils.result_evaluator import ResultEvaluator
+
+evaluator = ResultEvaluator()
+report = evaluator.evaluate(query, qtype, triples, docs, wiki)
+
+print(f"整体相关性: {report.overall_relevance}")  # HIGH/MEDIUM/LOW
+print(f"决策: {report.action}")                    # USE_RETRIEVAL/GENERATE_DIRECT
+print(f"高质量结果数: {report.high_relevant_count}")
+```
+
+### 4. adaptive_rag_engine.py - 核心引擎
+
+融合 Adaptive-RAG + Self-RAG 的智能问答引擎：
+
+```python
+from app.utils.adaptive_rag_engine import AdaptiveRAGEngine
+
+engine = AdaptiveRAGEngine(
+    project_name="project_v1",
+    enable_evaluation=True,     # 启用 Self-RAG 评估
+    enable_iteration=False      # 可选：启用迭代检索
+)
+
+context = engine.process("人工智能的发展历史")
+print(f"问题类型: {context.retrieval_plan.question_type}")
+print(f"检索结果: {context.retrieval_result.total_sources_used} 个知识源")
+print(f"评估结果: {context.evaluation_report.overall_relevance}")
+print(f"最终 Prompt: {context.assembled_prompt[:100]}...")
 ```
 
 ---
