@@ -2,7 +2,7 @@ import os
 import json
 from flask import Response, request, Blueprint
 
-from app.utils.chat_glm import stream_predict
+from app.model import stream_predict
 
 mod = Blueprint('chat', __name__, url_prefix='/chat')
 

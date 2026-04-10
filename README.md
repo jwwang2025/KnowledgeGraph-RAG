@@ -2,7 +2,7 @@
 
 ## 🔗项目简介
 
-本项目提出一种 “结构化知识图谱+非结构化文档库” 双检索驱动的检索增强生成（RAG）对话系统 ，核心目标是解决大模型在事实性问答中存在的 幻觉 问题，同时提升回答的可追溯性与上下文相关性。系统以知识图谱（结构化知识）和文档库（非结构化知识）为双重外部知识源，通过 RAG 技术将检索到的精准事实证据动态注入生成模型（ChatGLM-6B），最终实现 有依据、可验证、高准确的智能对话服务。
+本项目提出一种 "结构化知识图谱+非结构化文档库" 双检索驱动的检索增强生成（RAG）对话系统，核心目标是解决大模型在事实性问答中存在的 幻觉 问题，同时提升回答的可追溯性与上下文相关性。系统以知识图谱（结构化知识）和文档库（非结构化知识）为双重外部知识源，通过 RAG 技术将检索到的精准事实证据动态注入生成模型（ChatGLM-6B），最终实现 有依据、可验证、高准确的智能对话服务。
 
 ## 🎯 技术特性
 
@@ -12,7 +12,6 @@
 4. **Adaptive-RAG 智能路由**：根据问题类型自适应选择检索策略和知识源。
 5. **Self-RAG 结果评估**：评估检索结果相关性，智能过滤低质量内容。
 6. **CoT 思维链推理**：支持 Zero-shot / Few-shot / Self-Consistency 多种推理模式。
-
 
 ## 🛠️ 技术栈
 
@@ -32,91 +31,50 @@
 - **Vite**：构建工具
 
 ---
-## ✨系统流程
 
-![alt text](proj-docs/structure.png)
+## 🧠 系统架构
 
-## 🧠 Adaptive-RAG + Self-RAG 架构
-
-本项目融合了 Adaptive-RAG 和 Self-RAG 的先进思想，实现更智能的检索增强生成：
-
-### Adaptive-RAG 核心特性
+### Adaptive-RAG + Self-RAG + CoT 三层架构
 
 ```
 用户问题
     │
     ▼
-┌─────────────────┐
-│   QueryRouter   │  ← 问题路由：分析问题类型（事实型、定义型、比较型等）
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ RetrievalDecider │  ← 检索决策：根据问题类型自适应选择知识源和检索深度
-└────────┬────────┘
-         │
-    ┌────┴────┬────────┬──────┐
-    ▼        ▼        ▼      ▼
-  知识图谱  向量库   Wiki   图像
+┌─────────────────────────────────────────────────────────────┐
+│                    RAG 模块 (app/rag/)                      │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐      ┌─────────────────┐              │
+│  │   QueryRouter   │ ───→ │ RetrievalDecider │              │
+│  │   问题路由      │      │   检索决策       │              │
+│  └─────────────────┘      └────────┬────────┘              │
+│                                    │                        │
+│                    ┌───────────────┼───────────────┐       │
+│                    ▼               ▼               ▼       │
+│              ┌──────────┐  ┌────────────┐  ┌──────────┐    │
+│              │   Search │  │   Search   │  │  Search  │    │
+│              │  (向量库) │  │  (知识图谱) │  │  (Wiki)  │    │
+│              └────┬─────┘  └─────┬──────┘  └────┬─────┘    │
+│                   │             │              │           │
+│                   └─────────────┼──────────────┘           │
+│                                 ▼                            │
+│                      ┌─────────────────┐                     │
+│                      │ ResultEvaluator │                     │
+│                      │   结果评估      │                     │
+│                      └────────┬────────┘                     │
+│                               │                              │
+│                               ▼                              │
+│                      ┌─────────────────┐                   │
+│                      │  CoTReasoner     │                   │
+│                      │  思维链推理      │                   │
+│                      └────────┬────────┘                   │
+└──────────────────────────────┼───────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Model 模块 (app/model/)                    │
+│                      ChatGLM 模型生成                        │
+└─────────────────────────────────────────────────────────────┘
 ```
-
-**问题路由智能分类：**
-- 事实型问题 → 优先知识图谱 + 向量库
-- 定义类问题 → 优先 Wikipedia + 向量库
-- 比较类问题 → 多源检索 + 深度推理
-- 闲聊/数学 → 无需检索，直接生成
-
-### Self-RAG 核心特性
-
-```
-检索结果
-    │
-    ▼
-┌─────────────────┐
-│ ResultEvaluator │  ← 结果评估：评估每条结果的相关性、完整性
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   Relevance     │  ← 相关性评分：HIGH / MEDIUM / LOW / IRRELEVANT
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ ActionDecision  │  ← 行动决策：使用检索 / 直接生成 / 迭代检索
-└─────────────────┘
-```
-
-### CoT 思维链核心特性
-
-```
-用户问题
-    │
-    ▼
-┌─────────────────┐
-│  CoTReasoner    │  ← 根据问题类型选择 CoT 模式
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  问题分解       │  ← 将复杂问题分解为子问题
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  逐步推理       │  ← 基于知识上下文进行推理
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  结论综合       │  ← 整合推理步骤生成最终答案
-└─────────────────┘
-```
-
-**评估维度：**
-- 语义匹配度：查询与结果的内容相似度
-- 实体匹配度：查询实体在结果中的出现情况
-- 完整性评估：三元组/文档的信息完整程度
 
 ### 流程对比
 
@@ -126,12 +84,11 @@
 | 知识源选择 | 全部检索 | 按需选择 |
 | 结果质量 | 全部使用 | 智能过滤 |
 | 检索决策 | 盲目检索 | 反思决策 |
+| 推理能力 | 直接生成 | 思维链推理 |
 
 ---
 
 ## 🧩 CoT 思维链模块
-
-本项目集成了 CoT (Chain of Thought) 思维链推理，增强模型的推理能力。
 
 ### CoT 工作原理
 
@@ -147,29 +104,7 @@
 | **Few-shot CoT** | 基于示例学习推理模式 | 复杂概念 |
 | **Self-Consistency** | 多路径推理取最优 | 需要准确性的问题 |
 
-### CoT Prompt 示例
-
-**Zero-shot CoT:**
-```
-===参考资料===
-{知识内容}
-
-===问题===
-{用户问题}
-
-===要求===
-请按以下步骤思考并回答：
-1. 理解问题：分析这个问题的核心是什么
-2. 检索信息：从参考资料中提取相关信息
-3. 逻辑推理：基于信息进行推理
-4. 给出答案：综合以上得出最终答案
-
-请一步步思考：
-```
-
-### CoT 在项目中的应用
-
-问题类型 → CoT 模式映射:
+### 问题类型 → CoT 模式映射
 
 | 问题类型 | CoT 模式 | 原因 |
 |----------|----------|------|
@@ -179,10 +114,11 @@
 | 事实类 | zero_shot | 简单直接推理 |
 | 闲聊 | direct | 无需推理 |
 
+---
+
 ## 📺系统展示
 
 ### 问答页面（无检索增强）
-
 ![alt text](proj-docs/QAPagenG.png)
 
 ### 问答页面（有检索增强）
@@ -190,6 +126,8 @@
 
 ### 图谱页面
 ![alt text](proj-docs/graphPage.png)
+
+---
 
 ## 📁 项目结构
 
@@ -200,20 +138,33 @@ KnowledgeGraph-RAG/
 │   └── settings.py            # 项目配置
 ├── backend/                   # 后端服务与 API（Flask）
 │   ├── main.py                # 后端服务入口
-│   └── app/                   # Flask 应用（views, utils）
-│       ├── views/             # API 路由（chat.py, graph.py）
-│       └── utils/             # 工具函数
-│           ├── chat_glm.py              # ChatGLM 调用（集成 RAG）
-│           ├── query_router.py         # Adaptive-RAG：问题路由
-│           ├── retrieval_decider.py     # Adaptive-RAG：检索决策
-│           ├── result_evaluator.py      # Self-RAG：结果评估
-│           ├── cot_reasoner.py          # CoT：思维链推理 (新增)
-│           ├── adaptive_rag_engine.py   # Adaptive+Self+CoT 核心引擎
-│           ├── vector_searcher.py       # 向量数据库检索
-│           ├── graph_utils.py           # 知识图谱工具
-│           ├── ner.py                   # 命名实体识别
-│           ├── query_wiki.py            # Wikipedia 搜索
-│           └── image_searcher.py       # 图像搜索
+│   └── app/                   # Flask 应用
+│       ├── __init__.py       # 应用初始化
+│       ├── logger.py          # 日志工具
+│       ├── views/             # API 路由
+│       │   ├── chat.py        # 对话接口
+│       │   └── graph.py       # 图谱查询接口
+│       ├── rag/               # RAG 核心模块
+│       │   ├── __init__.py   # 模块导出
+│       │   ├── query_router.py         # Adaptive-RAG：问题路由
+│       │   ├── retrieval_decider.py    # Adaptive-RAG：检索决策
+│       │   ├── result_evaluator.py    # Self-RAG：结果评估
+│       │   ├── cot_reasoner.py        # CoT：思维链推理
+│       │   └── adaptive_rag_engine.py  # RAG 核心引擎
+│       ├── search/             # 检索适配器模块
+│       │   ├── __init__.py   # 模块导出
+│       │   ├── vector_searcher.py    # 向量数据库检索
+│       │   ├── wiki_searcher.py      # Wikipedia 搜索
+│       │   └── image_searcher.py      # 图像搜索
+│       ├── nlp/                # NLP 组件模块
+│       │   ├── __init__.py   # 模块导出
+│       │   └── ner.py               # 命名实体识别
+│       ├── model/              # 模型调用模块
+│       │   ├── __init__.py   # 模块导出
+│       │   └── chatglm.py           # ChatGLM 调用
+│       └── kg/                 # 知识图谱组件
+│           ├── __init__.py   # 模块导出
+│           └── graph_utils.py       # 图谱工具函数
 ├── modules/                   # 核心模块（知识图谱构建、模型训练等）
 │   ├── knowledge_graph_builder.py
 │   ├── model_trainer.py
@@ -231,65 +182,71 @@ KnowledgeGraph-RAG/
 ├── utils/                     # 工具脚本
 ├── README.md
 ├── requirements.txt
-├── package-lock.json
-└── other files (e.g. public/, frontend/package.json, etc.)
+└── package-lock.json
 ```
 
 ---
 
-## 🗝️ 新增 RAG 模块说明
+## 🏗️ 模块组织说明
 
-### 1. query_router.py - 问题路由器
+项目采用分层模块化设计，`app/` 目录结构如下：
 
-分析用户问题，决定检索策略：
+### RAG 模块 (`app/rag/`)
 
-```python
-from app.utils.query_router import QueryRouter
+检索增强生成核心组件，负责问题分析、检索决策和结果评估：
 
-router = QueryRouter()
-plan = router.route("什么是人工智能？")
+| 文件 | 说明 | 核心类/函数 |
+|------|------|-------------|
+| `query_router.py` | 问题路由器 | `QueryRouter`, `QuestionType`, `RetrievalPlan` |
+| `retrieval_decider.py` | 检索决策器 | `RetrievalDecider`, `MultiSourceRetrievalResult` |
+| `result_evaluator.py` | 结果评估器 | `ResultEvaluator`, `EvaluationReport` |
+| `cot_reasoner.py` | 思维链推理 | `CoTReasoner`, `CoTMode`, `ReasoningChain` |
+| `adaptive_rag_engine.py` | RAG 核心引擎 | `AdaptiveRAGEngine`, `RetrievalContext` |
 
-print(f"问题类型: {plan.question_type}")      # QuestionType.DEFINITION
-print(f"知识源: {plan.priority_sources}")      # ['wiki', 'vector']
-print(f"需要检索: {plan.need_retrieval}")     # True
-```
+### 检索模块 (`app/search/`)
 
-### 2. retrieval_decider.py - 检索决策器
+多种检索源适配器，为 RAG 提供数据检索能力：
 
-执行多源自适应检索：
+| 文件 | 说明 | 核心类 |
+|------|------|--------|
+| `vector_searcher.py` | 向量数据库检索 | `VectorSearcher` (ChromaDB) |
+| `wiki_searcher.py` | Wikipedia 搜索 | `WikiSearcher` |
+| `image_searcher.py` | 图像搜索 | `ImageSearcher` |
 
-```python
-from app.utils.retrieval_decider import RetrievalDecider
+### NLP 模块 (`app/nlp/`)
 
-decider = RetrievalDecider(project_name="project_v1")
-result = decider.retrieve("人工智能是谁发明的？", plan)
+自然语言处理组件：
 
-print(f"三元组: {result.triples}")
-print(f"文档: {result.documents}")
-print(f"Wikipedia: {result.wiki_summary}")
-```
+| 文件 | 说明 | 核心类 |
+|------|------|--------|
+| `ner.py` | 命名实体识别 | `Ner` (PaddleNLP UIE) |
 
-### 3. result_evaluator.py - 结果评估器
+### 模型模块 (`app/model/`)
 
-评估检索结果的相关性（Self-RAG）：
+大模型调用和配置：
 
-```python
-from app.utils.result_evaluator import ResultEvaluator
+| 文件 | 说明 | 核心函数 |
+|------|------|----------|
+| `chatglm.py` | ChatGLM 调用 | `start_model`, `stream_predict`, `init_rag_engine` |
 
-evaluator = ResultEvaluator()
-report = evaluator.evaluate(query, qtype, triples, docs, wiki)
+### 知识图谱模块 (`app/kg/`)
 
-print(f"整体相关性: {report.overall_relevance}")  # HIGH/MEDIUM/LOW
-print(f"决策: {report.action}")                    # USE_RETRIEVAL/GENERATE_DIRECT
-print(f"高质量结果数: {report.high_relevant_count}")
-```
+知识图谱查询和处理工具：
 
-### 4. adaptive_rag_engine.py - 核心引擎
+| 文件 | 说明 | 核心函数 |
+|------|------|----------|
+| `graph_utils.py` | 图谱工具 | `search_node_item`, `convert_graph_to_triples` |
+
+---
+
+## 🗝️ 模块使用说明
+
+### 1. 核心引擎 - AdaptiveRAGEngine
 
 融合 Adaptive-RAG + Self-RAG + CoT 的智能问答引擎：
 
 ```python
-from app.utils.adaptive_rag_engine import AdaptiveRAGEngine
+from app.rag import AdaptiveRAGEngine
 
 engine = AdaptiveRAGEngine(
     project_name="project_v1",
@@ -307,12 +264,59 @@ print(f"CoT 推理: {context.reasoning_chain}")
 print(f"最终 Prompt: {context.assembled_prompt[:100]}...")
 ```
 
-### 5. cot_reasoner.py - CoT 思维链推理器
+### 2. 问题路由 - QueryRouter
+
+分析用户问题，决定检索策略：
+
+```python
+from app.rag import QueryRouter
+
+router = QueryRouter()
+plan = router.route("什么是人工智能？")
+
+print(f"问题类型: {plan.question_type}")      # QuestionType.DEFINITION
+print(f"知识源: {plan.priority_sources}")      # ['wiki', 'vector']
+print(f"需要检索: {plan.need_retrieval}")     # True
+print(f"启用 CoT: {plan.use_cot}")            # True
+print(f"CoT 模式: {plan.cot_mode}")           # 'zero_shot'
+```
+
+### 3. 检索决策 - RetrievalDecider
+
+执行多源自适应检索：
+
+```python
+from app.rag import RetrievalDecider
+
+decider = RetrievalDecider(project_name="project_v1")
+result = decider.retrieve("人工智能是谁发明的？", plan)
+
+print(f"三元组: {result.triples}")
+print(f"文档: {result.documents}")
+print(f"Wikipedia: {result.wiki_summary}")
+```
+
+### 4. 结果评估 - ResultEvaluator
+
+评估检索结果的相关性（Self-RAG）：
+
+```python
+from app.rag import ResultEvaluator
+
+evaluator = ResultEvaluator()
+report = evaluator.evaluate(query, qtype, triples, docs, wiki)
+
+print(f"整体相关性: {report.overall_relevance}")  # HIGH/MEDIUM/LOW
+print(f"决策: {report.action}")                    # USE_RETRIEVAL/GENERATE_DIRECT
+print(f"高质量结果数: {report.high_relevant_count}")
+```
+
+### 5. 思维链推理 - CoTReasoner
 
 提供多种思维链推理模式：
 
 ```python
-from app.utils.cot_reasoner import CoTReasoner, CoTMode
+from app.rag import CoTReasoner, CoTMode
 
 # Zero-shot CoT
 reasoner = CoTReasoner(mode=CoTMode.ZERO_SHOT)
@@ -328,6 +332,22 @@ reasoner = CoTReasoner(mode=CoTMode.SELF_CONSISTENCY)
 chain = reasoner.reason("复杂分析问题", knowledge, depth=2)
 print(f"推理步骤: {len(chain.steps)}")
 print(f"一致性得分: {chain.consistency_score}")
+```
+
+### 6. 统一导入
+
+通过各模块的 `__init__.py` 提供统一导出，推荐使用子模块路径导入：
+
+```python
+# 推荐：使用子模块路径
+from app.rag import AdaptiveRAGEngine, QueryRouter, RetrievalDecider, ResultEvaluator, CoTReasoner
+from app.search import VectorSearcher, WikiSearcher, ImageSearcher
+from app.nlp import Ner
+from app.model import start_model, stream_predict
+from app.kg import search_node_item, convert_graph_to_triples
+
+# 兼容：使用统一导出（通过 app.utils）
+from app.utils import AdaptiveRAGEngine, QueryRouter, VectorSearcher
 ```
 
 ---
@@ -423,7 +443,7 @@ python main.py --project project_v1 --resume data/project_v1/history/20230327-00
 
 ```bash
 # 在项目根目录执行
-cd server
+cd backend
 python main.py
 ```
 
@@ -449,3 +469,9 @@ cd chat-kg
 # 启动服务器
 npm run server
 ```
+
+---
+
+## 📄 许可证
+
+本项目仅供学习和研究使用。

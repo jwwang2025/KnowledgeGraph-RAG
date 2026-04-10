@@ -14,7 +14,7 @@ load_dotenv()
 settings.setup_cuda()
 
 from app import apps
-from app.utils.chat_glm import start_model
+from app.model import start_model
 
 
 if __name__ == '__main__':

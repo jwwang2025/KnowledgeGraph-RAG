@@ -10,11 +10,9 @@ from typing import List, Dict, Any, Optional, Callable
 from enum import Enum
 
 from .query_router import QueryRouter, RetrievalPlan, QuestionType
-from .vector_searcher import VectorSearcher
-from .graph_utils import search_node_item, convert_graph_to_triples
-from .ner import Ner
-from .query_wiki import WikiSearcher
-from .image_searcher import ImageSearcher
+from app.search import VectorSearcher, WikiSearcher, ImageSearcher
+from app.kg import search_node_item, convert_graph_to_triples
+from app.nlp import Ner
 
 
 class RetrievalStatus(Enum):

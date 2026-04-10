@@ -32,7 +32,7 @@ def init_rag_engine():
     """初始化 Adaptive-RAG + CoT 引擎"""
     global rag_engine
     if rag_engine is None:
-        from app.utils.adaptive_rag_engine import AdaptiveRAGEngine
+        from app.rag import AdaptiveRAGEngine
         rag_engine = AdaptiveRAGEngine(
             project_name="project_v1",
             vector_db_path="./data/vector_db",
@@ -183,7 +183,7 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
     # ==================== 图像搜索 (始终执行) ====================
     image = None
     try:
-        from app.utils.image_searcher import ImageSearcher
+        from app.search import ImageSearcher
         image_searcher = ImageSearcher()
         image = image_searcher.search(user_input)
         base_result["image"] = image
@@ -194,8 +194,8 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
     wiki = None
     if not use_retrieval or not rag_metadata.get("has_wiki"):
         try:
-            from app.utils.ner import Ner
-            from app.utils.query_wiki import WikiSearcher
+            from app.nlp import Ner
+            from app.search import WikiSearcher
             from opencc import OpenCC
             
             ner = Ner()
@@ -272,9 +272,9 @@ def _fallback_retrieval(user_input: str) -> str:
     ref = ""
     
     try:
-        from app.utils.ner import Ner
-        from app.utils.graph_utils import search_node_item, convert_graph_to_triples
-        from app.utils.vector_searcher import VectorSearcher
+        from app.nlp import Ner
+        from app.kg import search_node_item, convert_graph_to_triples
+        from app.search import VectorSearcher
         
         ner = Ner()
         
