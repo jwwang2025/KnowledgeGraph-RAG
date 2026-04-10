@@ -11,16 +11,29 @@ from app.utils.image_searcher import ImageSearcher
 from app.utils.query_wiki import WikiSearcher
 from app.utils.ner import Ner
 from app.utils.graph_utils import convert_graph_to_triples, search_node_item
+from app.utils.vector_searcher import VectorSearcher
 from config.settings import settings
 
 model = None
 tokenizer = None
 init_history = None
+vector_searcher = None
 
 ner = Ner()
 image_searcher = ImageSearcher()
 wiki_searcher = WikiSearcher()
 cc = OpenCC('t2s')
+
+
+def init_vector_searcher():
+    """初始化向量搜索器"""
+    global vector_searcher
+    if vector_searcher is None:
+        vector_searcher = VectorSearcher(
+            collection_name="project_v1_docs",
+            persist_dir="./data/vector_db"
+        )
+    return vector_searcher
 
 def predict(user_input, history=None):
     global model, tokenizer, init_history
@@ -30,7 +43,7 @@ def predict(user_input, history=None):
 
 
 def stream_predict(user_input, history=None):
-    global model, tokenizer, init_history
+    global model, tokenizer, init_history, vector_searcher
     if not history:
         history = init_history
 
@@ -62,6 +75,20 @@ def stream_predict(user_input, history=None):
     if triples_str:
         ref += f"三元组信息：{triples_str}；"
 
+    # 新增：向量数据库语义检索
+    vector_context = ""
+    try:
+        vs = init_vector_searcher()
+        search_results = vs.search(user_input, top_k=3)
+        if search_results and search_results.get('documents') and search_results['documents'][0]:
+            docs = search_results['documents'][0]
+            vector_context = "；".join(docs[:3])
+            print("vector search results:", docs[:3])
+    except Exception as e:
+        print(f"向量检索失败: {e}")
+        
+    if vector_context:
+        ref += f"相关文档：{vector_context}；"
 
     image = image_searcher.search(user_input)
 

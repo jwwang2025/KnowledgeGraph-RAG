@@ -20,3 +20,7 @@ opencc-python-reimplemented>=0.1.7
 thefuzz>=0.19.0
 wikipedia-api>=0.6.0
 zhconv>=1.4.2
+
+# 向量数据库相关依赖
+chromadb>=0.4.0
+sentence-transformers>=2.2.0

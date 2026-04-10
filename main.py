@@ -16,15 +16,23 @@ from modules.knowledge_graph_builder import KnowledgeGraphBuilder
 def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--project", type=str, default="project_v1")
-    parser.add_argument("--resume", type=str, default=None, help="resume from a checkpoint")# 作用是从一个checkpoint恢复
-    # 默认使用第 0 张卡，避免单卡机器设置成 1 导致看不到 GPU
+    parser.add_argument("--resume", type=str, default=None, help="resume from a checkpoint")
     parser.add_argument("--gpu", type=str, default="0", help="gpu id")
+    parser.add_argument("--build-vector-index", action="store_true", help="build vector index only")
     args = parser.parse_args()
     return args
 
 if __name__ == "__main__":
     args = arg_parser()
-
+    
+    # 单独构建向量索引模式
+    if args.build_vector_index:
+        from modules.vector_indexer import VectorIndexer
+        indexer = VectorIndexer(project_name=args.project)
+        indexer.index_all()
+        print("向量索引构建完成！")
+        exit(0)
+    
     kg_builder = KnowledgeGraphBuilder(args)
 
     if args.resume is not None:
