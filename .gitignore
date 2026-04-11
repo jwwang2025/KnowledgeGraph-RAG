@@ -32,6 +32,9 @@ models/bert-base-chinese/
 models/uie-base/
 models/chatglm-6b/
 
+
+data/
+
 /cypress/videos/
 /cypress/screenshots/
 

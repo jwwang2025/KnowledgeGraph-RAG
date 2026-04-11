@@ -113,7 +113,7 @@ def convert_kg(kg_path: Path, out_path: Path) -> None:
 
 def main():
     kg_path = find_latest_kg_path()
-    out_path = Path("server/data/data.json")
+    out_path = Path("data/knowledge_graph/knowledge_graph.json")
     print(f"Using KG file: {kg_path}")
     convert_kg(kg_path, out_path)
 

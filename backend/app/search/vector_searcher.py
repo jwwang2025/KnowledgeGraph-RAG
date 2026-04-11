@@ -6,9 +6,12 @@ from chromadb.config import Settings
 class VectorSearcher:
     """ChromaDB 向量数据库检索器"""
     
-    def __init__(self, collection_name="knowledge_base", persist_dir="./data/vector_db"):
+    def __init__(self, collection_name="knowledge_base", persist_dir="./data/vector_db", model_name="paraphrase-multilingual-MiniLM-L12-v2", local_model_path=None):
         self.persist_dir = persist_dir
         self.collection_name = collection_name
+        self.model_name = model_name
+        # 支持本地模型路径或使用环境变量配置的镜像
+        self.local_model_path = local_model_path or os.environ.get("SENTENCE_TRANSFORMER_MODEL_PATH")
         self._init_client()
         
     def _init_client(self):
@@ -28,7 +31,15 @@ class VectorSearcher:
         """延迟加载编码器模型"""
         if self._encoder is None:
             from sentence_transformers import SentenceTransformer
-            self._encoder = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+            # 优先使用本地模型路径
+            model_path = self.local_model_path
+            if model_path and os.path.exists(model_path):
+                self._encoder = SentenceTransformer(model_path)
+            elif model_path:
+                print(f"[警告] 本地模型路径不存在: {model_path}，将尝试在线下载")
+                self._encoder = SentenceTransformer(self.model_name)
+            else:
+                self._encoder = SentenceTransformer(self.model_name)
         return self._encoder
         
     def get_embedding(self, texts):
@@ -38,20 +49,41 @@ class VectorSearcher:
         embeddings = self.encoder.encode(texts)
         return embeddings.tolist() if hasattr(embeddings, 'tolist') else list(embeddings)
         
-    def add_documents(self, texts, ids, metadatas=None):
-        """批量添加文档到向量数据库"""
+    def add_documents(self, texts, ids, metadatas=None, batch_size=1000):
+        """批量添加文档到向量数据库
+        
+        Args:
+            texts: 文档文本列表
+            ids: 文档 ID 列表
+            metadatas: 元数据列表（可选）
+            batch_size: 每批处理的文档数量（ChromaDB 限制，默认 1000）
+        """
         if not texts:
             return
             
-        embeddings = self.get_embedding(texts)
-        metadatas = metadatas or [{}] * len(texts)
+        total = len(texts)
+        metadatas = metadatas or [{}] * total
         
-        self.collection.add(
-            embeddings=embeddings,
-            documents=texts,
-            ids=ids,
-            metadatas=metadatas
-        )
+        # 分批处理，避免超过 ChromaDB 的批量大小限制
+        for i in range(0, total, batch_size):
+            end_idx = min(i + batch_size, total)
+            batch_texts = texts[i:end_idx]
+            batch_ids = ids[i:end_idx]
+            batch_metadatas = metadatas[i:end_idx]
+            
+            # 获取当前批次的向量嵌入
+            embeddings = self.get_embedding(batch_texts)
+            
+            self.collection.add(
+                embeddings=embeddings,
+                documents=batch_texts,
+                ids=batch_ids,
+                metadatas=batch_metadatas
+            )
+            
+            # 打印进度
+            if i + batch_size < total:
+                print(f"[进度] 已添加 {end_idx}/{total} 条文档")
         
     def add_document(self, text, doc_id, metadata=None):
         """添加单个文档"""

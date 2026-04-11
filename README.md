@@ -12,6 +12,7 @@
 4. **Adaptive-RAG 智能路由**：根据问题类型自适应选择检索策略和知识源。
 5. **Self-RAG 结果评估**：评估检索结果相关性，智能过滤低质量内容。
 6. **CoT 思维链推理**：支持 Zero-shot / Few-shot / Self-Consistency 多种推理模式。
+7. **引用溯源（Citations）**：确保回答中关键细节与检索来源可追溯验证。
 
 ## 🛠️ 技术栈
 
@@ -116,6 +117,113 @@
 
 ---
 
+## 🔄 Self-RAG 多轮检索策略
+
+### 架构概述
+
+基于 Self-RAG 思想，实现两轮后处理优化排序结果：
+
+```
+多源检索结果 (知识图谱 + 向量库 + Wikipedia)
+        │
+        ▼
+┌───────────────────────────────┐
+│   第一轮: RRF 融合与去重       │
+│   Reciprocal Rank Fusion      │
+│   - 多源结果融合排序           │
+│   - 智能去重处理              │
+└───────────────────────────────┘
+        │
+        ▼
+┌───────────────────────────────┐
+│   第二轮: Cohere 语义重排序    │
+│   Semantic Reranking          │
+│   - 语义感知精细化排序        │
+│   - 上下文相关性优化          │
+└───────────────────────────────┘
+        │
+        ▼
+   精排后的高质量结果
+```
+
+### RRF 融合算法
+
+Reciprocal Rank Fusion (RRF) 公式：
+
+$$\text{RRF}(d) = \sum_{s \in S} \frac{1}{k + \text{rank}_s(d)}$$
+
+其中：
+- \(d\): 文档/结果项
+- \(S\): 检索源集合
+- \(k\): 平滑因子 (默认60)
+- \(\text{rank}_s(d)\): 文档在源 \(s\) 中的排名
+
+**特点**：
+- 无需学习权重参数
+- 对各来源平等对待
+- 排名越靠前的结果权重越高
+
+### Cohere 语义重排序
+
+使用 Cohere Rerank API 进行语义级别的精确排序：
+
+**支持的模型**：
+- `rerank-multilingual-v3.0` (推荐，支持多语言)
+- `rerank-english-v2.0` (英文专用)
+
+**本地备选方案**：
+当 API 不可用时，使用本地相似度计算作为后备。
+
+### 使用示例
+
+```python
+from app.rag import (
+    AdaptiveRAGEngine,
+    RRFusion,
+    CohereReranker,
+    fuse_results,
+    quick_rerank
+)
+
+# 方式1: 通过引擎自动使用多轮检索
+engine = AdaptiveRAGEngine(
+    project_name="project_v1",
+    enable_multi_round=True,           # 启用多轮检索
+    cohere_api_key="your-api-key"     # Cohere API 密钥
+)
+
+context = engine.process("人工智能的发展历史")
+print(f"RRF融合统计: {context.fusion_stats}")
+print(f"Cohere重排统计: {context.rerank_stats}")
+
+# 方式2: 直接使用 RRF 融合
+fusion = RRFusion(k=60.0, enable_deduplication=True)
+source_results = {
+    'kg': [("人工智能", "属于", "计算机科学")],
+    'vector': ["人工智能是研究开发..."],
+    'wiki': {"summary": "人工智能（AI）是..."}
+}
+fusion_result = fusion.fuse("人工智能是什么", source_results)
+print(f"融合后结果数: {fusion_result.total_output}")
+
+# 方式3: 快速重排序
+from app.rag import FusionItem, quick_rerank
+candidates = [...]
+reranked = quick_rerank("查询", candidates, api_key="your-key")
+```
+
+### 配置参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `rrf_k` | 60.0 | RRF 平滑因子，越大排名差异越小 |
+| `dedup_threshold` | 0.85 | 去重相似度阈值 |
+| `cohere_model` | `rerank-multilingual-v3.0` | Cohere 重排序模型 |
+| `final_top_k` | 10 | 最终返回结果数量 |
+| `fusion_candidates` | 50 | 融合候选数量 |
+
+---
+
 ## 📺系统展示
 
 ### 问答页面（无检索增强）
@@ -150,6 +258,7 @@ KnowledgeGraph-RAG/
 │       │   ├── retrieval_decider.py    # Adaptive-RAG：检索决策
 │       │   ├── result_evaluator.py    # Self-RAG：结果评估
 │       │   ├── cot_reasoner.py        # CoT：思维链推理
+│       │   ├── citation.py            # Citation：引用溯源机制
 │       │   └── adaptive_rag_engine.py  # RAG 核心引擎
 │       ├── search/             # 检索适配器模块
 │       │   ├── __init__.py   # 模块导出
@@ -193,7 +302,7 @@ KnowledgeGraph-RAG/
 
 ### RAG 模块 (`app/rag/`)
 
-检索增强生成核心组件，负责问题分析、检索决策和结果评估：
+检索增强生成核心组件，负责问题分析、检索决策、结果评估和引用溯源：
 
 | 文件 | 说明 | 核心类/函数 |
 |------|------|-------------|
@@ -201,6 +310,9 @@ KnowledgeGraph-RAG/
 | `retrieval_decider.py` | 检索决策器 | `RetrievalDecider`, `MultiSourceRetrievalResult` |
 | `result_evaluator.py` | 结果评估器 | `ResultEvaluator`, `EvaluationReport` |
 | `cot_reasoner.py` | 思维链推理 | `CoTReasoner`, `CoTMode`, `ReasoningChain` |
+| `citation.py` | 引用溯源机制 | `Citation`, `CitationSet`, `CitationGenerator`, `CitationEmbedder` |
+| `fusion.py` | RRF 融合算法 | `RRFusion`, `FusionResult`, `MultiRoundRetrieval` |
+| `reranker.py` | Cohere 语义重排序 | `CohereReranker`, `RerankReport`, `SelfRAGRefiner` |
 | `adaptive_rag_engine.py` | RAG 核心引擎 | `AdaptiveRAGEngine`, `RetrievalContext` |
 
 ### 检索模块 (`app/search/`)
@@ -334,13 +446,136 @@ print(f"推理步骤: {len(chain.steps)}")
 print(f"一致性得分: {chain.consistency_score}")
 ```
 
-### 6. 统一导入
+### 6. 引用溯源 (Citation)
+
+引用溯源机制确保回答中关键细节与检索来源可追溯验证：
+
+```python
+from app.rag import Citation, CitationSet, CitationGenerator, CitationEmbedder
+
+# 从检索结果生成引用
+triples = [("人工智能", "属于", "计算机科学")]
+citations = CitationGenerator.generate_triple_citations(triples, query="什么是人工智能")
+
+# 处理文档引用
+docs = ["人工智能是计算机科学的一个分支..."]
+doc_citations = CitationGenerator.generate_document_citations(docs, query="人工智能定义")
+
+# 处理 Wikipedia 引用
+wiki_result = {"title": "人工智能", "summary": "人工智能（AI）是..."}
+wiki_citation = CitationGenerator.generate_wiki_citation(wiki_result, query="人工智能")
+
+# 合并引用集合
+citation_set = CitationSet()
+citation_set.add_batch(citations + doc_citations + [wiki_citation])
+print(f"总引用数: {len(citation_set.citations)}")
+
+# 按相关性排序
+sorted_citations = citation_set.get_sorted_by_relevance()
+
+# 格式化输出
+for citation in sorted_citations:
+    print(f"来源: {citation.source_name}")
+    print(f"片段: {citation.excerpt}")
+    print(f"相关度: {citation.relevance_score}")
+
+# 使用嵌入器添加引用标记
+embedder = CitationEmbedder(format_type="superscript")
+formatted_citations = embedder.format_citations_for_api(citation_set.citations)
+```
+
+### 8. Self-RAG 多轮检索 (RRF + Cohere)
+
+基于 Self-RAG 的多轮检索策略，实现两轮后处理优化排序：
+
+```python
+from app.rag import (
+    AdaptiveRAGEngine,  # 核心引擎（自动使用多轮检索）
+    RRFusion,          # RRF 融合器
+    CohereReranker,    # Cohere 重排序器
+    FusionItem,        # 融合项
+    fuse_results,      # 便捷融合函数
+    quick_rerank       # 便捷重排序函数
+)
+
+# 方式1: 通过引擎自动使用多轮检索（推荐）
+engine = AdaptiveRAGEngine(
+    project_name="project_v1",
+    enable_multi_round=True,           # 启用多轮检索
+    cohere_api_key="your-cohere-key"   # Cohere API 密钥
+)
+
+context = engine.process("人工智能的发展历史")
+print(f"RRF融合统计: {context.fusion_stats}")
+print(f"Cohere重排统计: {context.rerank_stats}")
+
+# 获取多轮检索摘要
+multi_round_summary = context.get_multi_round_summary()
+print(f"融合输入: {multi_round_summary['fusion']['input_count']}")
+print(f"融合输出: {multi_round_summary['fusion']['output_count']}")
+
+# 方式2: 直接使用 RRF 融合
+fusion = RRFusion(k=60.0, enable_deduplication=True)
+source_results = {
+    'kg': [("人工智能", "属于", "计算机科学")],
+    'vector': ["人工智能是研究开发..."],
+    'wiki': {"summary": "人工智能（AI）是..."}
+}
+fusion_result = fusion.fuse("人工智能是什么", source_results)
+print(f"融合后结果数: {fusion_result.total_output}")
+print(f"去重数量: {fusion_result.duplicates_removed}")
+
+# 获取融合后的结果
+for item in fusion_result.get_top_k(5):
+    print(f"内容: {item.content}, RRF得分: {item.rrf_score:.3f}")
+
+# 方式3: 使用 Cohere 重排序器
+reranker = CohereReranker(
+    api_key="your-cohere-key",
+    model="rerank-multilingual-v3.0",
+    enable_local_fallback=True  # API不可用时使用本地方案
+)
+
+# 重排序
+reranked_items = reranker.rerank(query, candidates, top_k=10)
+
+# 重排序并获取报告
+reranked_items, report = reranker.rerank_with_report(query, candidates, top_k=10)
+print(f"重排序模型: {report.model_used.value}")
+print(f"平均得分: {report.avg_score:.3f}")
+print(f"位置变化: {report.position_changes}")
+
+# 方式4: 快速便捷函数
+reranked = quick_rerank("查询", candidates, api_key="your-key")
+
+# 多轮检索控制器（高级用法）
+from app.rag import MultiRoundRetrieval
+controller = MultiRoundRetrieval(k=60.0, enable_dedup=True)
+controller.set_reranker(reranker)
+
+# 执行完整流程
+result = controller.execute_full_pipeline(
+    query="人工智能",
+    kg_results=[("AI", "是", "技术")],
+    vector_results=["AI相关文档..."],
+    wiki_result={"summary": "AI是..."},
+    final_top_k=10
+)
+print(f"总候选数: {result['total_candidates']}")
+print(f"最终数量: {result['final_count']}")
+```
+
+### 9. 统一导入
 
 通过各模块的 `__init__.py` 提供统一导出，推荐使用子模块路径导入：
 
 ```python
 # 推荐：使用子模块路径
-from app.rag import AdaptiveRAGEngine, QueryRouter, RetrievalDecider, ResultEvaluator, CoTReasoner
+from app.rag import (
+    AdaptiveRAGEngine, QueryRouter, RetrievalDecider, ResultEvaluator, CoTReasoner,
+    Citation, CitationSet, CitationContext, CitationGenerator, CitationEmbedder,
+    RRFusion, FusionItem, CohereReranker, SelfRAGRefiner
+)
 from app.search import VectorSearcher, WikiSearcher, ImageSearcher
 from app.nlp import Ner
 from app.model import start_model, stream_predict
@@ -364,6 +599,8 @@ from app.utils import AdaptiveRAGEngine, QueryRouter, VectorSearcher
 #### 1.2 安装Python依赖
 
 ```bash
+conda create -n KnowledgeGraph-RAG python=3.11
+conda activate KnowledgeGraph-RAG
 pip install -r requirements.txt
 ```
 
@@ -475,3 +712,19 @@ npm run server
 ## 📄 许可证
 
 本项目仅供学习和研究使用。
+
+
+
+# 1. 安装新依赖
+pip install chromadb sentence-transformers
+
+# 2. 构建向量索引
+python main.py --project project_v1 --build-vector-index
+
+# 或者单独构建某个来源
+python modules/vector_indexer.py --project project_v1 --source raw
+python modules/vector_indexer.py --project project_v1 --source graph
+python modules/vector_indexer.py --project project_v1 --source triples
+
+# 3. 启动后端服务（向量检索自动生效）
+cd server && python main.py

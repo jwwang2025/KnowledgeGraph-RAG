@@ -1,13 +1,15 @@
 """
 ChatGLM 模型调用与 Adaptive-RAG + Self-RAG + CoT 集成模块
+支持引用溯源机制
 
 本模块整合了:
 1. ChatGLM-6B 模型调用
 2. Adaptive-RAG 智能检索增强
 3. Self-RAG 结果评估与反思
 4. CoT 思维链推理
+5. Citation 引用溯源
 
-支持流式输出，实时返回对话状态
+支持流式输出，实时返回对话状态和引用信息
 """
 
 import os
@@ -64,9 +66,10 @@ def predict(user_input: str, history: List[Tuple[str, str]] = None) -> Tuple[str
 def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
                    use_adaptive_rag: bool = True,
                    enable_evaluation: bool = True,
-                   enable_cot: bool = True) -> Generator[bytes, None, None]:
+                   enable_cot: bool = True,
+                   include_citations: bool = True) -> Generator[bytes, None, None]:
     """
-    流式对话预测 (集成 Adaptive-RAG + Self-RAG + CoT)
+    流式对话预测 (集成 Adaptive-RAG + Self-RAG + CoT + Citation)
 
     Args:
         user_input: 用户输入
@@ -74,9 +77,10 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
         use_adaptive_rag: 是否使用 Adaptive-RAG (默认 True)
         enable_evaluation: 是否启用结果评估 (默认 True)
         enable_cot: 是否启用思维链 CoT (默认 True)
+        include_citations: 是否包含引用信息 (默认 True)
 
     Yields:
-        JSON 编码的流式响应
+        JSON 编码的流式响应 (包含 citations 字段)
     """
     global model, tokenizer, init_history
     
@@ -89,6 +93,7 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
         "query": user_input,
         "rag_context": None,       # RAG 上下文信息
         "evaluation": None,        # 评估报告
+        "citations": None,         # 引用溯源信息 (新增)
         "image": None,
         "graph": {},
         "wiki": None,
@@ -151,6 +156,14 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
             
             # 添加到元数据
             base_result["metadata"]["rag"] = rag_metadata
+            
+            # 添加引用溯源信息 (新增)
+            if include_citations and context.citation_set:
+                citation_embedder = CitationEmbedder(format_type="superscript")
+                base_result["citations"] = citation_embedder.format_citations_for_api(
+                    context.citation_set.citations
+                )
+                print(f"[Citation] 返回 {len(context.citation_set.citations)} 条引用")
             
             # 根据决策决定是否使用检索结果
             if context.use_retrieval and context.assembled_prompt:

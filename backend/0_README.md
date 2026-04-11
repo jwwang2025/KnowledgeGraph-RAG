@@ -23,7 +23,8 @@ server/
 │       ├── image_searcher.py      # 图片搜索工具
 │       └── logger.py              # 日志配置
 └── data/                          # 数据目录
-    └── data.json                  # 知识图谱数据（节点、边、句子）
+    └── knowledge_graph/           # 知识图谱可视化数据目录
+        └── knowledge_graph.json   # 知识图谱数据（节点、边、句子）
 ```
 
 ## 📄 文件详细说明
@@ -72,7 +73,7 @@ server/
 ### 知识图谱查询流程
 
 1. **用户请求** → `GET /graph/`
-2. **读取数据** → 从 `data/data.json` 读取完整图谱
+2. **读取数据** → 从 `data/knowledge_graph/knowledge_graph.json` 读取完整图谱
 3. **返回数据** → 返回 JSON 格式的图谱数据
 
 ## 🔧 技术栈

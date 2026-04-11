@@ -1,13 +1,8 @@
 """
 Adaptive-RAG 核心编排引擎
 融合 Adaptive-RAG、Self-RAG 和 CoT 思维链，实现智能问答
-
-核心流程:
-1. QueryRouter - 分析问题类型，决定检索策略
-2. RetrievalDecider - 执行多源自适应检索
-3. ResultEvaluator - 评估检索结果的相关性
-4. CoTReasoner - 构建思维链 prompt
-5. PromptAssembler - 组装增强后的 prompt
+支持引用溯源机制
+支持 Self-RAG 多轮检索策略（RRF 融合 + Cohere 重排序）
 """
 
 import time
@@ -21,6 +16,7 @@ from .query_router import QueryRouter, QuestionType, RetrievalPlan
 from .retrieval_decider import RetrievalDecider, MultiSourceRetrievalResult, RetrievalStatus
 from .result_evaluator import ResultEvaluator, EvaluationReport, ActionDecision, RelevanceLevel
 from .cot_reasoner import CoTReasoner, CoTMode, ReasoningChain
+from .citation import Citation, CitationSet, CitationContext, CitationEmbedder, CitationGenerator
 from config.settings import settings
 
 
@@ -61,9 +57,20 @@ class RetrievalContext:
     # 评估阶段
     evaluation_report: Optional[EvaluationReport] = None
     
-    # CoT 推理阶段 (新增)
+    # CoT 推理阶段
     reasoning_chain: Optional[ReasoningChain] = None
     cot_prompt: str = ""
+    
+    # ========== 多轮检索相关字段 (Self-RAG) ==========
+    # 多轮检索状态
+    multi_round_enabled: bool = False                    # 是否启用多轮检索
+    fusion_stats: Optional[Dict[str, Any]] = None      # RRF 融合统计
+    rerank_stats: Optional[Dict[str, Any]] = None      # Cohere 重排序统计
+    
+    # 引用溯源 (新增)
+    citation_set: Optional[CitationSet] = None    # 完整引用集合
+    citation_context: Optional[CitationContext] = None  # 检索时的引用上下文
+    embedded_citations: List[Citation] = field(default_factory=list)  # 嵌入到回答中的引用
     
     # 组装阶段
     assembled_prompt: str = ""
@@ -99,7 +106,36 @@ class RetrievalContext:
             "final_action": self.final_action.value,
             "use_cot": self.retrieval_plan.use_cot if self.retrieval_plan else False,
             "cot_mode": self.retrieval_plan.cot_mode if self.retrieval_plan else "direct",
-            "has_error": self.error is not None
+            "has_error": self.error is not None,
+            # 多轮检索信息
+            "multi_round_enabled": self.multi_round_enabled,
+            "fusion_stats": self.fusion_stats,
+            "rerank_stats": self.rerank_stats,
+            # 引用溯源信息
+            "citations_count": len(self.citation_set.citations) if self.citation_set else 0,
+            "embedded_citations_count": len(self.embedded_citations)
+        }
+    
+    def get_citations_summary(self) -> Dict[str, Any]:
+        """获取引用摘要"""
+        if not self.citation_set:
+            return {"total": 0, "sources": {}}
+        return {
+            "total": len(self.citation_set.citations),
+            "sources": self.citation_set.get_sources_summary(),
+            "by_source": {
+                source.value: [c.to_dict() for c in self.citation_set.get_by_source(source)]
+                for source in [CitationSource.KNOWLEDGE_GRAPH, CitationSource.VECTOR_DOCUMENT, 
+                              CitationSource.WIKIPEDIA, CitationSource.IMAGE]
+            }
+        }
+    
+    def get_multi_round_summary(self) -> Dict[str, Any]:
+        """获取多轮检索摘要"""
+        return {
+            "enabled": self.multi_round_enabled,
+            "fusion": self.fusion_stats,
+            "rerank": self.rerank_stats
         }
 
 
@@ -131,7 +167,9 @@ class AdaptiveRAGEngine:
                  enable_iteration: bool = False,
                  enable_cot: bool = True,
                  default_cot_mode: str = "zero_shot",
-                 max_iterations: int = 2):
+                 max_iterations: int = 2,
+                 enable_multi_round: bool = True,
+                 cohere_api_key: Optional[str] = None):
         """
         初始化引擎
         
@@ -143,14 +181,21 @@ class AdaptiveRAGEngine:
             enable_cot: 是否启用思维链 (CoT)
             default_cot_mode: 默认 CoT 模式 (zero_shot, few_shot, self_consistency)
             max_iterations: 最大迭代次数
+            enable_multi_round: 是否启用多轮检索 (Self-RAG RRF + Cohere)
+            cohere_api_key: Cohere API 密钥
         """
         # 组件初始化
         self.query_router = QueryRouter()
         self.retrieval_decider = RetrievalDecider(
             project_name=project_name,
-            vector_db_path=vector_db_path
+            vector_db_path=vector_db_path,
+            enable_multi_round=enable_multi_round,
+            cohere_api_key=cohere_api_key
         )
         self.result_evaluator = ResultEvaluator() if enable_evaluation else None
+        
+        # 多轮检索配置
+        self.enable_multi_round = enable_multi_round
         
         # CoT 思维链推理器 (新增)
         self.enable_cot = enable_cot
@@ -172,7 +217,10 @@ class AdaptiveRAGEngine:
             "avg_evaluation_time": 0,
             "avg_cot_time": 0,
             "cot_usage_count": 0,
-            "retrieval_source_counts": {}
+            "retrieval_source_counts": {},
+            "multi_round_usage_count": 0,
+            "avg_fusion_time": 0,
+            "avg_rerank_time": 0
         }
     
     @property
@@ -232,6 +280,44 @@ class AdaptiveRAGEngine:
                 query, context.retrieval_plan
             )
             context.add_stage(ProcessStage.RETRIEVING, time.time() - stage_start)
+            
+            # 保存引用上下文 (新增)
+            if context.retrieval_result:
+                context.citation_context = context.retrieval_result.citation_context
+                context.citation_set = context.citation_context.merge_all()
+                self.logger.info(f"[引用] 生成 {len(context.citation_set.citations)} 条引用记录")
+            
+            # ========== 多轮检索统计 (Self-RAG) ==========
+            if self.enable_multi_round and context.retrieval_result:
+                context.multi_round_enabled = True
+                
+                # RRF 融合统计
+                if context.retrieval_result.fusion_result:
+                    fusion_result = context.retrieval_result.fusion_result
+                    context.fusion_stats = {
+                        "input_count": fusion_result.total_input,
+                        "output_count": fusion_result.total_output,
+                        "duplicates_removed": fusion_result.duplicates_removed,
+                        "fusion_time": f"{fusion_result.fusion_time:.3f}s",
+                        "source_contributions": fusion_result.source_contributions
+                    }
+                
+                # Cohere 重排序统计
+                if context.retrieval_result.rerank_report:
+                    rerank_report = context.retrieval_result.rerank_report
+                    context.rerank_stats = {
+                        "model_used": rerank_report.model_used.value,
+                        "input_count": rerank_report.input_count,
+                        "output_count": rerank_report.output_count,
+                        "avg_score": f"{rerank_report.avg_score:.3f}",
+                        "max_score": f"{rerank_report.max_score:.3f}",
+                        "rerank_time": f"{rerank_report.rerank_time:.3f}s",
+                        "position_changes": rerank_report.position_changes
+                    }
+                
+                self.logger.info(f"[多轮检索] RRF融合: 输入{context.fusion_stats.get('input_count', 0)}条, "
+                               f"输出{context.fusion_stats.get('output_count', 0)}条; "
+                               f"Cohere重排: {context.rerank_stats.get('model_used', 'N/A')}")
             
             self.logger.info(f"[检索] 耗时: {context.retrieval_result.total_time:.2f}s, "
                            f"使用源: {context.retrieval_result.total_sources_used}")
@@ -412,7 +498,7 @@ class AdaptiveRAGEngine:
         return new_priority
     
     def _assemble_prompt(self, context: RetrievalContext):
-        """组装最终的 prompt (集成 CoT)"""
+        """组装最终的 prompt (集成 CoT 和引用溯源)"""
         if not context.use_retrieval or context.final_action == ActionDecision.GENERATE_DIRECT:
             # 无检索情况下的 prompt
             if self.enable_cot:
@@ -445,20 +531,24 @@ class AdaptiveRAGEngine:
         
         # 构建知识上下文
         context_parts = []
+        citation_header = ""  # 引用头部信息
         
         # 1. 知识图谱三元组
         if triples:
             triples_str = "；".join([f"({t[0]} {t[1]} {t[2]})" for t in triples[:10]])
             context_parts.append(f"【知识图谱】{triples_str}")
+            citation_header += "[来源1: 知识图谱] "
         
         # 2. 文档片段
         if documents:
             docs_str = "；".join(documents[:3])
             context_parts.append(f"【相关文档】{docs_str}")
+            citation_header += "[来源2: 文档库] "
         
         # 3. Wikipedia 摘要
         if wiki_summary:
             context_parts.append(f"【Wikipedia】{wiki_summary[:500]}")
+            citation_header += "[来源3: Wikipedia] "
         
         # 组装知识上下文
         context.knowledge_context = "；".join(context_parts)
@@ -471,11 +561,15 @@ class AdaptiveRAGEngine:
                 query=context.query,
                 knowledge=context.knowledge_context
             )
+            # 添加引用溯源提示
+            context.assembled_prompt += f"\n\n[引用溯源提示: {citation_header}]"
         elif context.knowledge_context:
-            # 普通模式 (无 CoT)
+            # 普通模式 (无 CoT) - 添加引用溯源信息
+            citation_info = f"\n\n===引用溯源信息===\n{citation_header}" if citation_header else ""
             context.assembled_prompt = (
                 f"\n===参考资料===\n{context.knowledge_context}；\n\n"
                 f"根据上面资料，用简洁且准确的话回答下面问题：\n{context.query}"
+                f"{citation_info}"
             )
         else:
             context.assembled_prompt = context.query
@@ -516,6 +610,30 @@ class AdaptiveRAGEngine:
             self.stats["avg_cot_time"] = (
                 (current_avg * (n - 1) + reason_time) / n
             )
+        
+        # 多轮检索统计
+        if context.multi_round_enabled:
+            self.stats["multi_round_usage_count"] = self.stats.get("multi_round_usage_count", 0) + 1
+            
+            # RRF 融合统计
+            if context.fusion_stats:
+                fusion_time_str = context.fusion_stats.get("fusion_time", "0s")
+                fusion_time = float(fusion_time_str.rstrip('s')) if isinstance(fusion_time_str, str) else 0
+                current_avg = self.stats.get("avg_fusion_time", 0)
+                n = self.stats["multi_round_usage_count"]
+                self.stats["avg_fusion_time"] = (
+                    (current_avg * (n - 1) + fusion_time) / n
+                )
+            
+            # Cohere 重排序统计
+            if context.rerank_stats:
+                rerank_time_str = context.rerank_stats.get("rerank_time", "0s")
+                rerank_time = float(rerank_time_str.rstrip('s')) if isinstance(rerank_time_str, str) else 0
+                current_avg = self.stats.get("avg_rerank_time", 0)
+                n = self.stats["multi_round_usage_count"]
+                self.stats["avg_rerank_time"] = (
+                    (current_avg * (n - 1) + rerank_time) / n
+                )
     
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""
@@ -529,8 +647,27 @@ class AdaptiveRAGEngine:
             "avg_evaluation_time": 0,
             "avg_cot_time": 0,
             "cot_usage_count": 0,
-            "retrieval_source_counts": {}
+            "retrieval_source_counts": {},
+            "multi_round_usage_count": 0,
+            "avg_fusion_time": 0,
+            "avg_rerank_time": 0
         }
+    
+    # ========== 多轮检索控制方法 ==========
+    
+    def enable_multi_round_retrieval(self, enabled: bool = True):
+        """启用/禁用多轮检索"""
+        self.enable_multi_round = enabled
+        self.retrieval_decider.enable_multi_round_retrieval(enabled)
+        print(f"[AdaptiveRAGEngine] 多轮检索: {'启用' if enabled else '禁用'}")
+    
+    def set_multi_round_config(self, config: Dict[str, Any]):
+        """设置多轮检索配置"""
+        self.retrieval_decider.set_multi_round_config(config)
+    
+    def get_multi_round_stats(self) -> Dict[str, Any]:
+        """获取多轮检索统计"""
+        return self.retrieval_decider.get_multi_round_stats()
 
 
 # ============ 便捷函数 ============

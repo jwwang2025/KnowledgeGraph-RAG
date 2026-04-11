@@ -2,7 +2,7 @@ import json
 
 
 def search_node_item(user_input, lite_graph=None):
-    with open('data/data.json', 'r') as f:
+    with open('data/knowledge_graph/knowledge_graph.json', 'r') as f:
         data = json.load(f)
 
     if lite_graph is None:
