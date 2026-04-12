@@ -365,10 +365,52 @@ def start_model():
     else:
         print(f"使用 HuggingFace Hub 模型: {model_path}")
     
-    # 加载模型
-    from transformers import AutoTokenizer, AutoModel
-    tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-    model = AutoModel.from_pretrained(model_path, trust_remote_code=True)
+    import sys
+    import types
+    import importlib.util
+    
+    # 直接导入 ChatGLM 自定义模块（避免 transformers trust_remote_code 的路径问题）
+    if os.path.exists(model_path):
+        # 创建假的父包模块用于相对导入
+        parent_module = types.ModuleType("transformers_modules")
+        parent_module.__path__ = [model_path]
+        sys.modules["transformers_modules"] = parent_module
+        
+        # 动态导入配置模块
+        config_path = os.path.join(model_path, "configuration_chatglm.py")
+        config_spec = importlib.util.spec_from_file_location("transformers_modules.configuration_chatglm", config_path)
+        config_module = importlib.util.module_from_spec(config_spec)
+        config_spec.loader.exec_module(config_module)
+        sys.modules["transformers_modules.configuration_chatglm"] = config_module
+        
+        # 动态导入 tokenizer 模块
+        tokenizer_path = os.path.join(model_path, "tokenization_chatglm.py")
+        tokenizer_spec = importlib.util.spec_from_file_location("transformers_modules.tokenization_chatglm", tokenizer_path)
+        tokenizer_module = importlib.util.module_from_spec(tokenizer_spec)
+        tokenizer_spec.loader.exec_module(tokenizer_module)
+        sys.modules["transformers_modules.tokenization_chatglm"] = tokenizer_module
+        
+        # 动态导入模型模块
+        modeling_path = os.path.join(model_path, "modeling_chatglm.py")
+        modeling_spec = importlib.util.spec_from_file_location("transformers_modules.modeling_chatglm", modeling_path)
+        modeling_module = importlib.util.module_from_spec(modeling_spec)
+        modeling_spec.loader.exec_module(modeling_module)
+        sys.modules["transformers_modules.modeling_chatglm"] = modeling_module
+        
+        # 使用自定义模块加载
+        ChatGLMConfig = config_module.ChatGLMConfig
+        ChatGLMTokenizer = tokenizer_module.ChatGLMTokenizer
+        ChatGLMForConditionalGeneration = modeling_module.ChatGLMForConditionalGeneration
+        
+        # 加载配置和模型
+        config = ChatGLMConfig.from_pretrained(model_path)
+        tokenizer = ChatGLMTokenizer.from_pretrained(model_path)
+        model = ChatGLMForConditionalGeneration.from_pretrained(model_path, config=config)
+    else:
+        # 从 HuggingFace Hub 加载（使用 trust_remote_code）
+        from transformers import AutoTokenizer, AutoModel
+        tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+        model = AutoModel.from_pretrained(model_path, trust_remote_code=True)
     
     # 检查 CUDA 是否可用
     import torch

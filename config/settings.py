@@ -96,6 +96,14 @@ class Settings:
             return _get_env("UIE_MODEL_NAME", default_path)
         return _get_env("UIE_MODEL_NAME", "uie-base")
 
+    @property
+    def QWEN3_EMBEDDING_MODEL_PATH(self) -> str:
+        """Qwen3-Embedding-8B model path for vectorization."""
+        default_path = str(self.PROJECT_ROOT / "models" / "Qwen3-Embedding-8B")
+        if (self.PROJECT_ROOT / "models" / "Qwen3-Embedding-8B").exists():
+            return _get_env("QWEN3_EMBEDDING_MODEL_PATH", default_path)
+        return _get_env("QWEN3_EMBEDDING_MODEL_PATH", "Qwen/Qwen3-Embedding-8B")
+
     # ============== Training Configuration ==============
     @property
     def TRAIN_RATIO(self) -> float:
@@ -197,6 +205,38 @@ class Settings:
         else:
             from data.schema.schema_v4 import schema
         return schema
+
+    # ============== Vector Index Configuration ==============
+    @property
+    def VECTOR_INDEX_CHUNK_SIZE(self) -> int:
+        """Chunk size for vector indexing."""
+        return _get_env_int("VECTOR_INDEX_CHUNK_SIZE", 512)
+
+    @property
+    def VECTOR_INDEX_OVERLAP(self) -> int:
+        """Overlap size for chunking."""
+        return _get_env_int("VECTOR_INDEX_OVERLAP", 50)
+
+    @property
+    def VECTOR_DB_PERSIST_DIR(self) -> Path:
+        """Vector database persistence directory."""
+        custom = _get_env("VECTOR_DB_PERSIST_DIR")
+        return Path(custom) if custom else self.DATA_DIR / "vector_db"
+
+    @property
+    def ENABLE_MULTI_REPRESENTATION(self) -> bool:
+        """Enable multi-representation indexing."""
+        return _get_env_bool("ENABLE_MULTI_REPRESENTATION", True)
+
+    @property
+    def VECTOR_INDEX_BATCH_SIZE(self) -> int:
+        """Batch size for vector indexing."""
+        return _get_env_int("VECTOR_INDEX_BATCH_SIZE", 8)
+
+    @property
+    def VECTOR_SEARCH_TOP_K(self) -> int:
+        """Default top-k for vector search."""
+        return _get_env_int("VECTOR_SEARCH_TOP_K", 5)
 
     # ============== Extend Ratio Threshold ==============
     @property

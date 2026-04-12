@@ -31,6 +31,7 @@ weights
 models/bert-base-chinese/
 models/uie-base/
 models/chatglm-6b/
+models/Qwen3-Embedding-8B/
 
 
 data/

@@ -701,7 +701,7 @@ python main.py
 
 ```bash
 # 进入前端目录
-cd chat-kg
+cd frontend
 
 # 启动服务器
 npm run server
