@@ -3,6 +3,7 @@
 基于 Adaptive-RAG 思想，根据检索计划执行多源自适应检索
 支持引用溯源机制
 支持 Self-RAG 多轮检索策略（RRF 融合 + Cohere 重排序）
+支持 LangChain 集成
 """
 
 import json
@@ -60,7 +61,7 @@ class MultiSourceRetrievalResult:
     has_structured_knowledge: bool = False                   # 是否有结构化知识
     has_unstructured_knowledge: bool = False                # 是否有非结构化知识
     
-    # 引用溯源 (新增)
+    # 引用溯源
     citation_context: CitationContext = field(default_factory=CitationContext)  # 引用上下文
     relevance_scores: Dict[str, List[float]] = field(default_factory=dict)      # 各源的相关性得分
     
@@ -117,7 +118,7 @@ class RetrievalDecider:
     """
     检索决策器 - 自适应执行多源检索
     
-    核心功能：
+    核心功���：
     1. 根据检索计划决定执行顺序
     2. 并行/串行执行多源检索
     3. 实时监控检索状态
@@ -125,6 +126,7 @@ class RetrievalDecider:
     5. 支持 Self-RAG 多轮检索策略:
        - 第一轮：RRF 融合多源结果
        - 第二轮：Cohere 语义重排序
+    6. 支持 LangChain 集成
     """
     
     def __init__(self, project_name: str = "project_v1", 
@@ -168,7 +170,7 @@ class RetrievalDecider:
         self._fusion_engine = None
         self._reranker = None
         self._refiner = None
-        
+    
     # ========== 延迟加载组件 ==========
     
     @property
@@ -328,7 +330,7 @@ class RetrievalDecider:
         # 获取融合后的候选集
         candidates = fusion_result.items
         
-        # 如果候选数量为0，直接返回
+        # 如果候选数量为0，直接返���
         if not candidates:
             return result
         
@@ -521,11 +523,11 @@ class RetrievalDecider:
         3. 返回文档列表
         """
         try:
-            # 语义检索
+            # 语义检索 (使用新的 LangChain 兼容接口)
             search_results = self.vector_searcher.search(
                 query, 
                 top_k=plan.max_docs,
-                threshold=1.5  # ChromaDB的距离阈值，越小越相似
+                where_document=None  # 暂不使用文档过滤
             )
             
             documents = []
@@ -538,13 +540,16 @@ class RetrievalDecider:
             # 限制数量
             documents = documents[:plan.max_docs]
             
+            # 获取相似度分数
+            distances = search_results.get('distances', [[]])[0][:len(documents)] if documents else []
+            
             return RetrievalResult(
                 source="vector",
                 status=RetrievalStatus.COMPLETED,
                 data=documents,
                 metadata={
                     "docs_found": len(documents),
-                    "similarity_scores": search_results.get('distances', [[]])[0][:len(documents)]
+                    "similarity_scores": distances
                 }
             )
             
@@ -735,3 +740,58 @@ class RetrievalDecider:
                 "refiner": self._refiner is not None
             }
         }
+    
+    # ========== LangChain 集成方法 ==========
+    
+    def get_langchain_retriever(self, source: str = "vector", **kwargs):
+        """
+        获取 LangChain Retriever
+        
+        Args:
+            source: 知识源类型 ("vector", "wiki")
+            **kwargs: 传递给 retriever 的参数
+        
+        Returns:
+            LangChain Retriever 实例
+        """
+        if source == "vector":
+            return self.vector_searcher.as_retriever(**kwargs)
+        elif source == "wiki":
+            from langchain_community.tools import WikipediaQueryRun
+            from langchain_community.utilities import WikipediaAPIWrapper
+            wrapper = WikipediaAPIWrapper(top_k_results=kwargs.get("top_k", 3))
+            return WikipediaQueryRun(api_wrapper=wrapper)
+        else:
+            raise ValueError(f"不支持的知识源类型: {source}")
+    
+    def get_multi_source_retriever(self, sources: List[str] = None, **kwargs):
+        """
+        获取多源检索 Retriever
+        
+        Args:
+            sources: 知识源列表
+            **kwargs: 传递给 retriever 的参数
+        
+        Returns:
+            MultiSourceRetriever 实例
+        """
+        from app.rag.langchain_components import MultiSourceRetriever
+        
+        if sources is None:
+            sources = ["vector", "wiki"]
+        
+        retrievers = {}
+        if "vector" in sources:
+            retrievers["vector_retriever"] = self.vector_searcher.as_retriever(**kwargs)
+        if "wiki" in sources:
+            from langchain_community.tools import WikipediaQueryRun
+            from langchain_community.utilities import WikipediaAPIWrapper
+            wrapper = WikipediaAPIWrapper(top_k_results=kwargs.get("top_k", 3))
+            retrievers["wiki_wrapper"] = wrapper
+        
+        return MultiSourceRetriever(
+            vector_retriever=retrievers.get("vector_retriever"),
+            wiki_wrapper=retrievers.get("wiki_wrapper"),
+            k=kwargs.get("k", 4),
+            source_weights=kwargs.get("source_weights", {"vector": 0.4, "kg": 0.4, "wiki": 0.2})
+        )

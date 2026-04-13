@@ -1,6 +1,7 @@
 """
 ChatGLM 模型调用与 Adaptive-RAG + Self-RAG + CoT 集成模块
 支持引用溯源机制
+支持 LangChain 集成
 
 本模块整合了:
 1. ChatGLM-6B 模型调用
@@ -8,6 +9,7 @@ ChatGLM 模型调用与 Adaptive-RAG + Self-RAG + CoT 集成模块
 3. Self-RAG 结果评估与反思
 4. CoT 思维链推理
 5. Citation 引用溯源
+6. LangChain RAG Chain 集成
 
 支持流式输出，实时返回对话状态和引用信息
 """
@@ -18,7 +20,7 @@ sys.path.append('server/app')
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import json
-from typing import List, Optional, Generator, Tuple, Any
+from typing import List, Optional, Generator, Tuple, Any, Dict
 from config.settings import settings
 
 # 全局变量
@@ -28,6 +30,9 @@ init_history = None
 
 # Adaptive-RAG 组件 (延迟初始化)
 rag_engine = None
+
+# LangChain 组件 (延迟初始化)
+langchain_adapter = None
 
 
 def init_rag_engine():
@@ -44,6 +49,28 @@ def init_rag_engine():
             default_cot_mode="zero_shot"  # 默认 Zero-shot CoT 模式
         )
     return rag_engine
+
+
+def init_langchain_adapter():
+    """
+    初始化 LangChain 适配器
+    
+    提供 LangChain 风格的 RAG 接口
+    """
+    global langchain_adapter
+    if langchain_adapter is None:
+        from app.rag.langchain_components import LangChainAdapter, create_langchain_vectorstore
+        
+        # 创建向量存储
+        vectorstore = create_langchain_vectorstore(
+            collection_name="project_v1_docs",
+            persist_dir="./data/vector_db"
+        )
+        
+        langchain_adapter = LangChainAdapter(vectorstore=vectorstore)
+        print("[LangChain] 适配器初始化完成")
+    
+    return langchain_adapter
 
 
 def predict(user_input: str, history: List[Tuple[str, str]] = None) -> Tuple[str, List[Tuple[str, str]]]:
@@ -67,9 +94,10 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
                    use_adaptive_rag: bool = True,
                    enable_evaluation: bool = True,
                    enable_cot: bool = True,
-                   include_citations: bool = True) -> Generator[bytes, None, None]:
+                   include_citations: bool = True,
+                   use_langchain: bool = False) -> Generator[bytes, None, None]:
     """
-    流式对话预测 (集成 Adaptive-RAG + Self-RAG + CoT + Citation)
+    流式对话预测 (集成 Adaptive-RAG + Self-RAG + CoT + Citation + LangChain)
 
     Args:
         user_input: 用户输入
@@ -78,6 +106,7 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
         enable_evaluation: 是否启用结果评估 (默认 True)
         enable_cot: 是否启用思维链 CoT (默认 True)
         include_citations: 是否包含引用信息 (默认 True)
+        use_langchain: 是否使用 LangChain RAG Chain (默认 False)
 
     Yields:
         JSON 编码的流式响应 (包含 citations 字段)
@@ -125,7 +154,9 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
                 # CoT 相关元数据
                 "use_cot": context.retrieval_plan.use_cot if context.retrieval_plan else False,
                 "cot_mode": context.retrieval_plan.cot_mode if context.retrieval_plan else "direct",
-                "reasoning_depth": context.retrieval_plan.reasoning_depth if context.retrieval_plan else 0
+                "reasoning_depth": context.retrieval_plan.reasoning_depth if context.retrieval_plan else 0,
+                # LangChain 集成标记
+                "langchain_enabled": use_langchain
             }
             
             # 添加检索上下文到返回数据
@@ -138,7 +169,9 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
                 # CoT 信息
                 "use_cot": context.retrieval_plan.use_cot if context.retrieval_plan else False,
                 "cot_mode": context.retrieval_plan.cot_mode if context.retrieval_plan else "direct",
-                "reasoning_steps": len(context.reasoning_chain.steps) if context.reasoning_chain else 0
+                "reasoning_steps": len(context.reasoning_chain.steps) if context.reasoning_chain else 0,
+                # LangChain 信息
+                "langchain_enabled": use_langchain
             }
             
             # 添加评估报告 (如果启用)
@@ -159,11 +192,19 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
             
             # 添加引用溯源信息 (新增)
             if include_citations and context.citation_set:
-                citation_embedder = CitationEmbedder(format_type="superscript")
-                base_result["citations"] = citation_embedder.format_citations_for_api(
-                    context.citation_set.citations
-                )
-                print(f"[Citation] 返回 {len(context.citation_set.citations)} 条引用")
+                CitationEmbedder = None
+                try:
+                    from app.rag.citation import CitationEmbedder as CitationEmbedderClass
+                    CitationEmbedder = CitationEmbedderClass
+                except ImportError:
+                    pass
+                
+                if CitationEmbedder:
+                    citation_embedder = CitationEmbedder(format_type="superscript")
+                    base_result["citations"] = citation_embedder.format_citations_for_api(
+                        context.citation_set.citations
+                    )
+                    print(f"[Citation] 返回 {len(context.citation_set.citations)} 条引用")
             
             # 根据决策决定是否使用检索结果
             if context.use_retrieval and context.assembled_prompt:
@@ -179,6 +220,21 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
             print(f"[Adaptive-RAG 错误] {e}")
             # 出错时回退到原始查询
             base_result["metadata"]["rag_error"] = str(e)
+    
+    # ==================== LangChain RAG Chain (可选) ====================
+    if use_langchain and not use_retrieval:
+        try:
+            adapter = init_langchain_adapter()
+            
+            # 使用 LangChain RAG Chain
+            # 注意：需要 LLM，可以通过 adapter 设置
+            # 这里展示 LangChain 集成的能力，实际使用时需要配置 LLM
+            base_result["metadata"]["langchain_note"] = "LangChain 适配器已就绪，需要配置 LLM"
+            print("[LangChain] RAG Chain 已准备就绪")
+            
+        except Exception as e:
+            print(f"[LangChain 错误] {e}")
+            base_result["metadata"]["langchain_error"] = str(e)
     
     # ==================== 备用检索方案 (当 Adaptive-RAG 未启用或失败时) ====================
     if not use_retrieval and model is not None:
@@ -264,7 +320,7 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
             
             yield json.dumps(result, ensure_ascii=False).encode('utf8') + b'\n'
     else:
-        # 模型��加载
+        # 模型未加载
         updates = {
             "query": user_input,
             "response": "模型加载中，请稍后再试"
@@ -338,6 +394,64 @@ def _fallback_retrieval(user_input: str) -> str:
     return ref
 
 
+# ==================== LangChain RAG Chain 便捷函数 ====================
+
+def get_langchain_rag_chain(
+    template_type: str = "rag",
+    use_history: bool = False,
+    use_cot: bool = False
+):
+    """
+    获取 LangChain RAG Chain
+    
+    Args:
+        template_type: 模板类型 ("rag", "citation", "cot", "comparison", "definition")
+        use_history: 是否使用对话历史
+        use_cot: 是否启用思维链
+    
+    Returns:
+        LangChain RunnableSequence
+    
+    Note:
+        需要先配置 LLM，否则返回 None
+    """
+    global langchain_adapter
+    
+    try:
+        adapter = init_langchain_adapter()
+        return adapter.build_rag_chain(
+            template_type=template_type,
+            use_history=use_history,
+            use_cot=use_cot
+        )
+    except Exception as e:
+        print(f"[LangChain] 获取 RAG Chain 失败: {e}")
+        return None
+
+
+def invoke_langchain_rag(query: str, history: List[tuple] = None) -> Dict[str, Any]:
+    """
+    使用 LangChain RAG Chain 处理查询
+    
+    Args:
+        query: 用户查询
+        history: 对话历史
+    
+    Returns:
+        处理结果字典
+    """
+    chain = get_langchain_rag_chain()
+    if chain is None:
+        return {"error": "LangChain RAG Chain 未就绪"}
+    
+    try:
+        input_data = {"question": query, "history": history or []}
+        result = chain.invoke(input_data)
+        return {"result": result}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 # ==================== 生命周期管理 ====================
 
 def start_model():
@@ -345,6 +459,7 @@ def start_model():
     启动并加载 ChatGLM 模型
     
     从配置系统获取模型路径，支持本地路径和 HuggingFace Hub
+    同时初始化 LangChain 组件
     """
     global model, tokenizer, init_history
 
@@ -432,6 +547,14 @@ def start_model():
     print("预热 Adaptive-RAG 引擎...")
     _ = init_rag_engine()
     print("Adaptive-RAG 引擎就绪")
+    
+    # 预热 LangChain 适配器 (可选)
+    print("预热 LangChain 组件...")
+    try:
+        _ = init_langchain_adapter()
+        print("LangChain 组件就绪")
+    except Exception as e:
+        print(f"[警告] LangChain 组件初始化失败: {e}")
 
 
 def get_rag_stats() -> dict:
@@ -447,3 +570,11 @@ def reset_rag_stats():
     global rag_engine
     if rag_engine:
         rag_engine.reset_stats()
+
+
+def get_langchain_stats() -> dict:
+    """获取 LangChain 统计信息"""
+    global langchain_adapter
+    if langchain_adapter:
+        return {"adapter_ready": True}
+    return {"adapter_ready": False}
