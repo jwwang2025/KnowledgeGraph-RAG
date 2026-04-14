@@ -6,18 +6,24 @@ Adaptive-RAG 核心编排引擎
 """
 
 import time
-import json
 import logging
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Generator
+from typing import List, Dict, Any, Optional
 from enum import Enum
 
 from .query_router import QueryRouter, QuestionType, RetrievalPlan
 from .retrieval_decider import RetrievalDecider, MultiSourceRetrievalResult, RetrievalStatus
 from .result_evaluator import ResultEvaluator, EvaluationReport, ActionDecision, RelevanceLevel
 from .cot_reasoner import CoTReasoner, CoTMode, ReasoningChain
-from .citation import Citation, CitationSet, CitationContext, CitationEmbedder, CitationGenerator
-from config.settings import settings
+from .citation import Citation, CitationSet, CitationContext
+
+# LangSmith 集成
+try:
+    from .langsmith_integration import traced, get_langsmith_manager
+    LANGSMITH_AVAILABLE = True
+except ImportError:
+    LANGSMITH_AVAILABLE = False
+    traced = lambda **kwargs: lambda f: f  # 空装饰器
 
 
 class ProcessStage(Enum):
@@ -169,7 +175,8 @@ class AdaptiveRAGEngine:
                  default_cot_mode: str = "zero_shot",
                  max_iterations: int = 2,
                  enable_multi_round: bool = True,
-                 cohere_api_key: Optional[str] = None):
+                 cohere_api_key: Optional[str] = None,
+                 enable_langsmith: bool = True):
         """
         初始化引擎
         
@@ -183,7 +190,16 @@ class AdaptiveRAGEngine:
             max_iterations: 最大迭代次数
             enable_multi_round: 是否启用多轮检索 (Self-RAG RRF + Cohere)
             cohere_api_key: Cohere API 密钥
+            enable_langsmith: 是否启用 LangSmith 追踪
         """
+        # LangSmith 追踪配置
+        self.enable_langsmith = enable_langsmith and LANGSMITH_AVAILABLE
+        if self.enable_langsmith:
+            self.langsmith_manager = get_langsmith_manager()
+            if self.langsmith_manager.is_enabled():
+                print("[LangSmith] RAG Engine 追踪已启用")
+            else:
+                self.enable_langsmith = False
         # 组件初始化
         self.query_router = QueryRouter()
         self.retrieval_decider = RetrievalDecider(
@@ -238,6 +254,7 @@ class AdaptiveRAGEngine:
             )
         return self._cot_reasoner
     
+    @traced(name="rag_process", tags=["rag", "adaptive"])
     def process(self, query: str, history: List[tuple] = None) -> RetrievalContext:
         """
         处理用户查询的完整流程
@@ -362,6 +379,10 @@ class AdaptiveRAGEngine:
             stage_start = time.time()
             self._assemble_prompt(context)
             context.add_stage(ProcessStage.ASSEMBLING, time.time() - stage_start)
+            
+            # ========== LangSmith 追踪记录 ==========
+            if self.enable_langsmith:
+                self._log_to_langsmith(context)
             
             # 完成
             context.add_stage(ProcessStage.COMPLETED)
@@ -573,6 +594,57 @@ class AdaptiveRAGEngine:
             )
         else:
             context.assembled_prompt = context.query
+    
+    def _log_to_langsmith(self, context: RetrievalContext):
+        """将 RAG 执行结果记录到 LangSmith"""
+        try:
+            manager = self.langsmith_manager
+            
+            # 记录主要输入输出
+            manager.log_run(
+                name="rag_process",
+                inputs={
+                    "query": context.query,
+                    "question_type": context.retrieval_plan.question_type.value if context.retrieval_plan else None,
+                    "use_retrieval": context.use_retrieval,
+                    "sources_used": context.retrieval_result.total_sources_used if context.retrieval_result else 0
+                },
+                outputs={
+                    "final_action": context.final_action.value,
+                    "total_time": context.total_time,
+                    "stages": context.stage_history,
+                    "citations_count": len(context.citation_set.citations) if context.citation_set else 0
+                },
+                tags=["rag", "adaptive", "langsmith"]
+            )
+            
+            # 记录检索详情
+            if context.retrieval_result:
+                manager.log_run(
+                    name="retrieval",
+                    inputs={"query": context.query},
+                    outputs={
+                        "triples_count": len(context.retrieval_result.triples),
+                        "docs_count": len(context.retrieval_result.documents),
+                        "has_wiki": context.retrieval_result.wiki_summary is not None
+                    },
+                    tags=["retrieval", "multi-source"]
+                )
+            
+            # 记录评估详情
+            if context.evaluation_report:
+                manager.log_run(
+                    name="evaluation",
+                    inputs={"query": context.query},
+                    outputs={
+                        "relevance": context.evaluation_report.overall_relevance.value,
+                        "confidence": context.evaluation_report.overall_confidence
+                    },
+                    tags=["evaluation", "self-rag"]
+                )
+                
+        except Exception as e:
+            self.logger.warning(f"[LangSmith] 记录失败: {e}")
     
     def _update_stats(self, context: RetrievalContext):
         """更新统计信息"""

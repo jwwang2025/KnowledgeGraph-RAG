@@ -11,6 +11,7 @@ RAG 模块 - 检索增强生成核心组件
 |- fusion: RRF 融合算法 (Self-RAG 多轮检索第一轮)
 |- reranker: Cohere 语义重排序 (Self-RAG 多轮检索第二轮)
 |- langchain_components: LangChain 集成组件
+|- langsmith_integration: LangSmith 追踪和评估
 """
 
 from .query_router import QueryRouter, QuestionType, RetrievalPlan
@@ -62,6 +63,13 @@ from .langchain_components import (
     documents_to_langchain,
     format_retrieval_results,
     RetrievalResult,
+)
+# LangSmith 集成
+from .langsmith_integration import (
+    LangSmithConfig,
+    LangSmithManager,
+    get_langsmith_manager,
+    traced,
 )
 
 __all__ = [
@@ -131,4 +139,9 @@ __all__ = [
     'documents_to_langchain',
     'format_retrieval_results',
     'RetrievalResult',
+    # ========== LangSmith 集成 ==========
+    'LangSmithConfig',
+    'LangSmithManager',
+    'get_langsmith_manager',
+    'traced',
 ]

@@ -34,6 +34,9 @@ rag_engine = None
 # LangChain 组件 (延迟初始化)
 langchain_adapter = None
 
+# LangSmith 组件 (延迟初始化)
+langsmith_manager = None
+
 
 def init_rag_engine():
     """初始化 Adaptive-RAG + CoT 引擎"""
@@ -49,6 +52,27 @@ def init_rag_engine():
             default_cot_mode="zero_shot"  # 默认 Zero-shot CoT 模式
         )
     return rag_engine
+
+
+def init_langsmith():
+    """
+    初始化 LangSmith 追踪
+    
+    从环境变量读取配置：
+    - LANGSMITH_API_KEY: LangSmith API 密钥
+    - LANGSMITH_PROJECT: 项目名称 (默认: knowledge-graph-rag)
+    """
+    global langsmith_manager
+    if langsmith_manager is None:
+        from app.rag.langsmith_integration import get_langsmith_manager
+        
+        langsmith_manager = get_langsmith_manager()
+        if langsmith_manager.is_enabled():
+            print(f"[LangSmith] 初始化完成，项目: {langsmith_manager.config.project_name}")
+        else:
+            print("[LangSmith] 未配置 API Key，追踪功能已禁用")
+    
+    return langsmith_manager
 
 
 def init_langchain_adapter():
@@ -555,6 +579,14 @@ def start_model():
         print("LangChain 组件就绪")
     except Exception as e:
         print(f"[警告] LangChain 组件初始化失败: {e}")
+    
+    # 初始化 LangSmith 追踪
+    print("初始化 LangSmith 追踪...")
+    try:
+        _ = init_langsmith()
+        print("LangSmith 追踪就绪")
+    except Exception as e:
+        print(f"[警告] LangSmith 初始化失败: {e}")
 
 
 def get_rag_stats() -> dict:
@@ -578,3 +610,23 @@ def get_langchain_stats() -> dict:
     if langchain_adapter:
         return {"adapter_ready": True}
     return {"adapter_ready": False}
+
+
+def get_langsmith_stats() -> dict:
+    """获取 LangSmith 统计信息"""
+    global langsmith_manager
+    if langsmith_manager and langsmith_manager.is_enabled():
+        return {
+            "enabled": True,
+            "project": langsmith_manager.config.project_name
+        }
+    return {"enabled": False}
+
+
+def is_langsmith_enabled() -> bool:
+    """检查 LangSmith 是否启用"""
+    global langsmith_manager
+    if langsmith_manager is None:
+        manager = init_langsmith()
+        return manager.is_enabled()
+    return langsmith_manager.is_enabled()
