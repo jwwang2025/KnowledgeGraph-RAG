@@ -97,15 +97,4 @@ ul {
     margin: 0.3em 0;
   }
 }
-
-footer {
-  margin-top: auto;
-  text-align: center;
-  font-size: 0.8em;
-  color: #999;
-
-  a {
-    color: #999;
-  }
-}
 </style>

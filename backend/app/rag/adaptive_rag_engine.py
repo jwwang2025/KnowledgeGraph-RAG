@@ -15,7 +15,7 @@ from .query_router import QueryRouter, QuestionType, RetrievalPlan
 from .retrieval_decider import RetrievalDecider, MultiSourceRetrievalResult, RetrievalStatus
 from .result_evaluator import ResultEvaluator, EvaluationReport, ActionDecision, RelevanceLevel
 from .cot_reasoner import CoTReasoner, CoTMode, ReasoningChain
-from .citation import Citation, CitationSet, CitationContext
+from .citation import Citation, CitationSet, CitationContext, CitationSource
 
 # LangSmith 集成
 try:
@@ -37,6 +37,15 @@ class ProcessStage(Enum):
     GENERATING = "generating"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+# CoT 模式字符串 -> 枚举映射（全局唯一，避免重复定义）
+COT_MODE_MAP = {
+    "zero_shot": CoTMode.ZERO_SHOT,
+    "few_shot": CoTMode.FEW_SHOT,
+    "self_consistency": CoTMode.SELF_CONSISTENCY,
+    "direct": CoTMode.DIRECT,
+}
 
 
 @dataclass
@@ -200,6 +209,7 @@ class AdaptiveRAGEngine:
                 print("[LangSmith] RAG Engine 追踪已启用")
             else:
                 self.enable_langsmith = False
+
         # 组件初始化
         self.query_router = QueryRouter()
         self.retrieval_decider = RetrievalDecider(
@@ -209,25 +219,30 @@ class AdaptiveRAGEngine:
             cohere_api_key=cohere_api_key
         )
         self.result_evaluator = ResultEvaluator() if enable_evaluation else None
-        
+
         # 多轮检索配置
         self.enable_multi_round = enable_multi_round
-        
-        # CoT 思维链推理器 (新增)
+
+        # CoT 思维链推理器（按模式缓存，避免每次请求重建）
         self.enable_cot = enable_cot
         self.default_cot_mode = default_cot_mode
-        self._cot_reasoner: Optional[CoTReasoner] = None
-        
+        self._cot_reasoners: Dict[str, CoTReasoner] = {}
+
         # 配置
         self.enable_evaluation = enable_evaluation
         self.enable_iteration = enable_iteration
         self.max_iterations = max_iterations
-        
+
         # 日志
         self.logger = logging.getLogger(__name__)
-        
+
         # 统计
-        self.stats = {
+        self.stats = self._new_stats()
+
+    @staticmethod
+    def _new_stats() -> Dict[str, Any]:
+        """构造初始统计字典（初始化与重置共用）"""
+        return {
             "total_queries": 0,
             "avg_retrieval_time": 0,
             "avg_evaluation_time": 0,
@@ -238,22 +253,22 @@ class AdaptiveRAGEngine:
             "avg_fusion_time": 0,
             "avg_rerank_time": 0
         }
-    
+
+    def _get_reasoner(self, mode_key: str) -> CoTReasoner:
+        """获取指定模式的 CoT 推理器（按模式缓存，全局仅创建一次）"""
+        reasoner = self._cot_reasoners.get(mode_key)
+        if reasoner is None:
+            reasoner = CoTReasoner(
+                mode=COT_MODE_MAP.get(mode_key, CoTMode.ZERO_SHOT)
+            )
+            self._cot_reasoners[mode_key] = reasoner
+        return reasoner
+
     @property
     def cot_reasoner(self) -> CoTReasoner:
-        """延迟加载 CoT 推理器"""
-        if self._cot_reasoner is None:
-            mode_map = {
-                "zero_shot": CoTMode.ZERO_SHOT,
-                "few_shot": CoTMode.FEW_SHOT,
-                "self_consistency": CoTMode.SELF_CONSISTENCY,
-                "direct": CoTMode.DIRECT
-            }
-            self._cot_reasoner = CoTReasoner(
-                mode=mode_map.get(self.default_cot_mode, CoTMode.ZERO_SHOT)
-            )
-        return self._cot_reasoner
-    
+        """默认模式的 CoT 推理器（缓存）"""
+        return self._get_reasoner(self.default_cot_mode)
+
     @traced(name="rag_process", tags=["rag", "adaptive"])
     def process(self, query: str, history: List[tuple] = None) -> RetrievalContext:
         """
@@ -401,31 +416,19 @@ class AdaptiveRAGEngine:
             return context
     
     def _apply_cot_reasoning(self, context: RetrievalContext):
-        """应用 CoT 思维链推理"""
+        """应用 CoT 思维链推理（复用缓存的推理器）"""
         if not context.retrieval_plan.use_cot:
             return
-        
-        # 根据路由决定 CoT 模式
-        cot_mode_str = context.retrieval_plan.cot_mode
-        
-        # 创建对应模式的 CoT 推理器
-        mode_map = {
-            "zero_shot": CoTMode.ZERO_SHOT,
-            "few_shot": CoTMode.FEW_SHOT,
-            "self_consistency": CoTMode.SELF_CONSISTENCY,
-            "direct": CoTMode.DIRECT
-        }
-        
-        cot_mode = mode_map.get(cot_mode_str, CoTMode.ZERO_SHOT)
-        reasoner = CoTReasoner(mode=cot_mode)
-        
+
+        reasoner = self._get_reasoner(context.retrieval_plan.cot_mode)
+
         # 执行推理
         context.reasoning_chain = reasoner.reason(
             query=context.query,
             knowledge_context=context.knowledge_context,
             depth=context.retrieval_plan.reasoning_depth
         )
-        
+
         # 生成 CoT prompt
         context.cot_prompt = reasoner.build_cot_prompt(
             query=context.query,
@@ -649,97 +652,48 @@ class AdaptiveRAGEngine:
     def _update_stats(self, context: RetrievalContext):
         """更新统计信息"""
         self.stats["total_queries"] += 1
-        
+        n = self.stats["total_queries"]
+
+        def _avg(key: str, value: float):
+            """增量更新平均值"""
+            self.stats[key] = (self.stats[key] * (n - 1) + value) / n
+
         if context.retrieval_result:
-            # 平均检索时间
-            current_avg = self.stats["avg_retrieval_time"]
-            n = self.stats["total_queries"]
-            self.stats["avg_retrieval_time"] = (
-                (current_avg * (n - 1) + context.retrieval_result.total_time) / n
-            )
-            
+            _avg("avg_retrieval_time", context.retrieval_result.total_time)
             # 知识源使用统计
             for source, result in context.retrieval_result.results.items():
                 if result.status == RetrievalStatus.COMPLETED:
                     self.stats["retrieval_source_counts"][source] = (
                         self.stats["retrieval_source_counts"].get(source, 0) + 1
                     )
-        
+
         if context.evaluation_report:
-            current_avg = self.stats["avg_evaluation_time"]
-            n = self.stats["total_queries"]
-            eval_time = context.stage_times.get(ProcessStage.EVALUATING.value, 0)
-            self.stats["avg_evaluation_time"] = (
-                (current_avg * (n - 1) + eval_time) / n
-            )
-        
-        # CoT 统计
+            _avg("avg_evaluation_time", context.stage_times.get(ProcessStage.EVALUATING.value, 0))
+
         if context.reasoning_chain:
-            self.stats["cot_usage_count"] = self.stats.get("cot_usage_count", 0) + 1
-            reason_time = context.stage_times.get(ProcessStage.REASONING.value, 0)
-            current_avg = self.stats["avg_cot_time"]
-            n = self.stats["total_queries"]
-            self.stats["avg_cot_time"] = (
-                (current_avg * (n - 1) + reason_time) / n
-            )
-        
-        # 多轮检索统计
+            self.stats["cot_usage_count"] += 1
+            _avg("avg_cot_time", context.stage_times.get(ProcessStage.REASONING.value, 0))
+
+        # 多轮检索统计（直接使用数值耗时，避免字符串往返解析）
         if context.multi_round_enabled:
-            self.stats["multi_round_usage_count"] = self.stats.get("multi_round_usage_count", 0) + 1
-            
-            # RRF 融合统计
-            if context.fusion_stats:
-                fusion_time_str = context.fusion_stats.get("fusion_time", "0s")
-                fusion_time = float(fusion_time_str.rstrip('s')) if isinstance(fusion_time_str, str) else 0
-                current_avg = self.stats.get("avg_fusion_time", 0)
-                n = self.stats["multi_round_usage_count"]
-                self.stats["avg_fusion_time"] = (
-                    (current_avg * (n - 1) + fusion_time) / n
-                )
-            
-            # Cohere 重排序统计
-            if context.rerank_stats:
-                rerank_time_str = context.rerank_stats.get("rerank_time", "0s")
-                rerank_time = float(rerank_time_str.rstrip('s')) if isinstance(rerank_time_str, str) else 0
-                current_avg = self.stats.get("avg_rerank_time", 0)
-                n = self.stats["multi_round_usage_count"]
-                self.stats["avg_rerank_time"] = (
-                    (current_avg * (n - 1) + rerank_time) / n
-                )
-    
+            self.stats["multi_round_usage_count"] += 1
+            m = self.stats["multi_round_usage_count"]
+
+            def _mavg(key: str, value: float):
+                self.stats[key] = (self.stats[key] * (m - 1) + value) / m
+
+            if context.retrieval_result.fusion_result:
+                _mavg("avg_fusion_time", context.retrieval_result.fusion_result.fusion_time)
+            if context.retrieval_result.rerank_report:
+                _mavg("avg_rerank_time", context.retrieval_result.rerank_report.rerank_time)
+
     def get_stats(self) -> Dict[str, Any]:
         """获取统计信息"""
         return self.stats.copy()
-    
+
     def reset_stats(self):
         """重置统计"""
-        self.stats = {
-            "total_queries": 0,
-            "avg_retrieval_time": 0,
-            "avg_evaluation_time": 0,
-            "avg_cot_time": 0,
-            "cot_usage_count": 0,
-            "retrieval_source_counts": {},
-            "multi_round_usage_count": 0,
-            "avg_fusion_time": 0,
-            "avg_rerank_time": 0
-        }
-    
-    # ========== 多轮检索控制方法 ==========
-    
-    def enable_multi_round_retrieval(self, enabled: bool = True):
-        """启用/禁用多轮检索"""
-        self.enable_multi_round = enabled
-        self.retrieval_decider.enable_multi_round_retrieval(enabled)
-        print(f"[AdaptiveRAGEngine] 多轮检索: {'启用' if enabled else '禁用'}")
-    
-    def set_multi_round_config(self, config: Dict[str, Any]):
-        """设置多轮检索配置"""
-        self.retrieval_decider.set_multi_round_config(config)
-    
-    def get_multi_round_stats(self) -> Dict[str, Any]:
-        """获取多轮检索统计"""
-        return self.retrieval_decider.get_multi_round_stats()
+        self.stats = self._new_stats()
 
 
 # ============ 便捷函数 ============

@@ -1,5 +1,6 @@
-
+"""命名实体识别（PaddleNLP Taskflow）。"""
 from paddlenlp import Taskflow
+
 
 class Ner:
     def __init__(self):
@@ -9,20 +10,14 @@ class Ner:
         return self.model(text)
 
     def get_entities(self, text, etypes=None):
-        '''获取句子中指定类型的实体
-
-        Args:
-            text: 句子
-            etype: 实体类型
-        Returns:
-            entities: 实体列表
-        '''
+        """获取句子中指定类型的实体（只做一次预测，按类型过滤）"""
         if etypes is None:
             etypes = [None]
 
+        results = self.predict(text)
         entities = []
         for etype in etypes:
-            for ent, et in self.predict(text):
+            for ent, et in results:
                 if not etype or etype in et:
                     entities.append(ent)
         return entities

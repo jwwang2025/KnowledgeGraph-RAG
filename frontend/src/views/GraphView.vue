@@ -70,7 +70,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive, watch } from 'vue'
+import { ref, onMounted, onUnmounted, reactive } from 'vue'
 import * as echarts from 'echarts'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
@@ -80,8 +80,6 @@ const chartRef = ref(null)
 const state = reactive({
   graph: {},
   searchText: '',
-  showInfo: true,
-  nodeInfo: [],
   filterMode: 'all',
   displayedNodes: 0,
   totalNodes: 0,
@@ -310,6 +308,10 @@ const colorfulSents = (node, nerborNodes, sents) => {
 }
 
 const onSearch = (value) => {
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+    searchTimer = null
+  }
   if (!value || !state.graph.nodes) return
 
   const targetNode = state.graph.nodes.find(
@@ -326,13 +328,19 @@ const onSearch = (value) => {
   }
 }
 
+let searchTimer = null
+
 const onSearchChange = (e) => {
   state.searchText = e.target.value
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    searchTimer = null
+    onSearch(state.searchText)
+  }, 300)
 }
 
 const clickNode = (param) => {
   if (param.dataType === 'node') {
-    state.showInfo = true
     const node = param.data
     const sents = (node.lines || []).map((item) => state.graph.sents[item]).filter(Boolean)
     const nerborNodes = getNeighborNodes(node)
@@ -357,9 +365,6 @@ const askAboutNode = () => {
 
 const expandNode = () => {
   if (state.selectedNode) {
-    const neighborNodes = getNeighborNodes(state.selectedNode)
-    const neighborNames = neighborNodes.map(n => n.name)
-
     myChart.dispatchAction({
       type: 'focusNodeAdjacency',
       dataIndex: state.selectedNode.id
@@ -372,6 +377,17 @@ onMounted(() => {
   myChart.showLoading()
   fetchWebkitDepData()
   myChart.on('click', clickNode)
+})
+
+onUnmounted(() => {
+  if (myChart) {
+    myChart.dispose()
+    myChart = null
+  }
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+    searchTimer = null
+  }
 })
 </script>
 
@@ -451,25 +467,6 @@ onMounted(() => {
   &::-webkit-scrollbar-thumb {
     background: #ccc;
     border-radius: 3px;
-  }
-
-  .graph-placeholder {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    height: 100%;
-    color: #999;
-    text-align: center;
-
-    p {
-      margin: 0.5rem 0;
-    }
-
-    .hint {
-      font-size: 0.85rem;
-      color: #bbb;
-    }
   }
 }
 
@@ -575,42 +572,9 @@ onMounted(() => {
   width: 400px;
   padding: 2rem 1rem;
   overflow: scroll;
-
-  .search-area {
-    display: flex;
-    flex-direction: row;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    height: 40px;
-    margin-bottom: 1rem;
-
-    input {
-      flex: 1;
-      width: 100%;
-      padding: 0.5rem 1rem;
-      background-color: #fff;
-      border: none;
-      border-radius: 8px;
-      font-size: 0.8rem;
-      margin: 1rem 1rem;
-      color: #111111;
-      line-height: 22px;
-      transition: all 0.3s;
-    }
-
-    input:focus {
-      outline: 2px solid #999;
-    }
-
-    input::-webkit-input-placeholder {
-      color: #999999;
-    }
-  }
 }
 
-#graph-info,
-.node-info {
+#graph-info {
   display: flex;
   flex-direction: column;
   justify-content: start;
@@ -620,27 +584,5 @@ onMounted(() => {
   &::-webkit-scrollbar {
     display: none;
   }
-}
-
-.node-info {
-  display: flex;
-  flex-direction: column;
-  justify-content: start;
-  align-items: center;
-  width: 100%;
-  height: 100%;
-  overflow: scroll;
-}
-
-#graph-info .node-sent {
-  margin: 1rem 0;
-  padding: 1rem;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05);
-  font-size: 0.8rem;
-  color: #111111;
-  line-height: 22px;
-  transition: all 0.3s;
 }
 </style>

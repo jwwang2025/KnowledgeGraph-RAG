@@ -11,7 +11,6 @@ import { ref } from 'vue'
 
 const title = ref('KnowledgeGraph-RAG')
 const description = ref('知识图谱 + RAG 双驱动大模型对话系统')
-const image = ref('chat-kg/src/assets/homegraph.png')
 </script>
 
 <style scoped>

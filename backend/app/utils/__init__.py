@@ -1,14 +1,4 @@
-"""
-app/utils 模块 - 工具函数统一导出（兼容旧接口）
-
-为保持向后兼容，提供从各子模块的统一导出。
-推荐使用新的子模块路径：
-- app.rag: RAG 核心模块
-- app.search: 检索适配器模块
-- app.nlp: NLP 组件模块
-- app.model: 模型调用模块
-- app.kg: 知识图谱模块
-"""
+"""app/utils 模块：向后兼容的统一导出（推荐直接使用 app.rag / app.search / app.nlp / app.model / app.kg）。"""
 
 # 从各子模块导入，保持向后兼容
 from app.rag import (
@@ -45,7 +35,6 @@ from app.kg import (
     search_node_item,
     convert_graph_to_triples,
     load_knowledge_graph,
-    get_graph_statistics,
 )
 
 # 保留 logger
@@ -66,7 +55,7 @@ __all__ = [
     'start_model', 'stream_predict', 'predict', 'init_rag_engine',
     # KG 模块
     'search_node_item', 'convert_graph_to_triples',
-    'load_knowledge_graph', 'get_graph_statistics',
+    'load_knowledge_graph',
     # 日志模块
     'setup_logger', 'get_logger',
 ]

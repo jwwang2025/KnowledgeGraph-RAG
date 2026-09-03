@@ -93,9 +93,9 @@
         </div>
       </div>
 
-      <p v-show="info.graph?.nodes?.length > 0"><b>关联图谱</b></p>
-      <div id="lite_graph" v-show="info.graph?.nodes?.length > 0"></div>
-      <a-collapse v-model:activeKey="state.activeKey" v-if="info.graph?.sents?.length > 0" accordion>
+      <p v-show="hasGraphNodes"><b>关联图谱</b></p>
+      <div id="lite_graph" v-show="hasGraphNodes"></div>
+      <a-collapse v-model:activeKey="state.activeKey" v-if="hasGraphSents" accordion>
         <a-collapse-panel
           v-for="(sent, index) in info.graph.sents"
           :key="index"
@@ -112,7 +112,7 @@
 
 <script setup>
 import * as echarts from 'echarts';
-import { reactive, ref, onMounted, watch } from 'vue'
+import { reactive, ref, computed, onMounted, onUnmounted } from 'vue'
 import { SendOutlined, ClearOutlined } from '@ant-design/icons-vue'
 
 let myChart = null;
@@ -147,6 +147,9 @@ const default_info = {
 const info = reactive({
   ...default_info
 })
+
+const hasGraphNodes = computed(() => info.graph?.nodes?.length > 0)
+const hasGraphSents = computed(() => info.graph?.sents?.length > 0)
 
 const scrollToBottom = () => {
   setTimeout(() => {
@@ -184,7 +187,6 @@ const updateLastReceivedMessage = (message, id, extra = {}) => {
 const sendMessage = () => {
   if (state.inputText.trim()) {
     appendMessage(state.inputText, 'sent')
-    const loadingMsg = { text: '思考中...', type: 'received' }
     state.messages.push({
       id: state.messages.length + 1,
       type: 'received',
@@ -210,8 +212,6 @@ const sendMessage = () => {
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
-      let pic
-      let wiki
       let graph
       let ragStats
       let citations
@@ -222,7 +222,6 @@ const sendMessage = () => {
         return reader.read().then(({ done, value }) => {
           if (done) {
             state.isLoading = false
-            console.log('Finished')
             return
           }
 
@@ -292,7 +291,7 @@ const sendMessage = () => {
               }
 
             } catch (e) {
-              console.log('Parse error:', e)
+              console.error('Parse error:', e)
             }
           }
 
@@ -309,7 +308,6 @@ const sendMessage = () => {
 }
 
 const graphOption = (graph) => {
-  console.log(graph)
   graph.nodes.forEach(node => {
     node.symbolSize = 5;
     node.label = {
@@ -380,6 +378,13 @@ const clearChat = () => {
 onMounted(() => {
   sendDeafultMessage()
   myChart = echarts.init(document.getElementById('lite_graph'));
+})
+
+onUnmounted(() => {
+  if (myChart) {
+    myChart.dispose()
+    myChart = null
+  }
 })
 </script>
 

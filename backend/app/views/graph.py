@@ -1,7 +1,7 @@
-import os
 import json
-from flask import request, Blueprint, jsonify
-from thefuzz import process
+from flask import Blueprint, jsonify
+
+from app.kg import load_knowledge_graph
 
 
 mod = Blueprint('graph', __name__, url_prefix='/graph')
@@ -9,22 +9,7 @@ mod = Blueprint('graph', __name__, url_prefix='/graph')
 
 @mod.route('/', methods=['GET'])
 def graph():
-    with open('data/knowledge_graph/knowledge_graph.json', 'r') as f:
-        data = json.load(f)
-
     return jsonify({
-        'data': data,
+        'data': load_knowledge_graph(),
         'message': 'You Got It!'
     })
-
-
-# @mod.route('/search', methods=['GET'])
-# def get_triples():
-#     # 获取参数
-#     user_input = request.args.get('search')
-#     result = search_node_item(user_input)
-
-#     return jsonify({
-#         'data': result,
-#         'message': 'Got it!'
-#     })

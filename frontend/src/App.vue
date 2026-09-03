@@ -1,15 +1,3 @@
-<script setup>
-import { KeepAlive } from 'vue'
-import { RouterLink, RouterView, useRoute } from 'vue-router'
-
-// 打印当前页面的路由信息，使用 vue3 的 setup composition API
-const route = useRoute()
-console.log(route)
-
-
-
-</script>
-
 <template>
   <header class="header">
     <nav class="nav">
@@ -69,10 +57,8 @@ console.log(route)
   position: absolute;
   display: block;
   width: 2rem;
-  // left: 0;
   height: 2px;
   background-color: #005f77;
   margin-top: 4px;
-  // z-index: 10;
 }
 </style>

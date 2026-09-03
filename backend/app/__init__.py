@@ -1,10 +1,10 @@
 # coding=utf-8
 from flask import Flask, jsonify
 from flask_cors import CORS
-from app.model import start_model
 
-apps = Flask(__name__)# 这段代码是为了解决跨域问题，Flask默认不支持跨域
-CORS(apps, resources=r'/*')# CORS的用法是（Cross-Origin Resource Sharing，跨域资源共享
+apps = Flask(__name__)
+# 解决跨域问题（Flask 默认不支持跨域）
+CORS(apps, resources=r'/*')
 
 from app.views import chat, graph
 apps.register_blueprint(chat.mod)
@@ -24,4 +24,3 @@ def page_not_found(e):
 @apps.errorhandler(403)
 def page_not_found(e):
     return jsonify({"message": str(e)}), 403
-

@@ -1,9 +1,28 @@
 import json
+import os
+
+# 知识图谱数据缓存：文件较大且每次检索/请求都会用到，
+# 只在文件变更时重新加载，避免每次调用都重复读盘和解析
+_graph_cache = {"mtime": None, "data": None}
+
+
+def load_knowledge_graph():
+    """加载知识图谱数据（带 mtime 缓存）"""
+    path = 'data/knowledge_graph/knowledge_graph.json'
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return {'nodes': [], 'links': [], 'sents': []}
+
+    if _graph_cache["mtime"] != mtime or _graph_cache["data"] is None:
+        with open(path, 'r') as f:
+            _graph_cache["data"] = json.load(f)
+        _graph_cache["mtime"] = mtime
+    return _graph_cache["data"]
 
 
 def search_node_item(user_input, lite_graph=None):
-    with open('data/knowledge_graph/knowledge_graph.json', 'r') as f:
-        data = json.load(f)
+    data = load_knowledge_graph()
 
     if lite_graph is None:
         lite_graph = {
@@ -12,11 +31,10 @@ def search_node_item(user_input, lite_graph=None):
             'sents': []
         }
 
-    # 利用thefuzz库来选取最相近的节点
-    # node_names = [node['name'] for node in data['nodes']]
-    # user_input = process.extractOne(user_input, node_names)[0]
-
     DEEP = 1
+
+    def match_node(node_name, keyword):
+        return node_name in keyword or keyword in node_name
 
     # search node
     search_nodes = [user_input]
@@ -25,8 +43,7 @@ def search_node_item(user_input, lite_graph=None):
             for edge in data['links']:
                 source = data['nodes'][int(edge['source'])]
                 target = data['nodes'][int(edge['target'])]
-                if source['name'] in serch_node or serch_node in source['name'] or target['name'] in serch_node or serch_node in target['name']:
-                # if source['name'] == serch_node or target['name'] == serch_node:
+                if match_node(source['name'], serch_node) or match_node(target['name'], serch_node):
                     sent = data['sents'][edge['sent']]
                     if sent not in lite_graph['sents']:
                         edge['sent'] = len(lite_graph['sents'])

@@ -1,9 +1,25 @@
-# 配置 logger
+# 日志配置
 import logging
 import logging.config
 import os
 
-FORMAT = '%(asctime)s %(levelname)s %(name)s %(message)s' # 配置日志格式
-logging.basicConfig(format=FORMAT)# basicConfig函数对日志的输出格式及方式做相关配置
-logger = logging.getLogger('server')# getLogger函数通过指定的名称获取日志器
+FORMAT = '%(asctime)s %(levelname)s %(name)s %(message)s'
+logging.basicConfig(format=FORMAT)
+logger = logging.getLogger('server')
 
+
+def setup_logger(name: str = 'server', level: int = logging.INFO, log_file: str = None) -> logging.Logger:
+    """配置并返回指定名称的 logger（可选输出到文件）"""
+    log = logging.getLogger(name)
+    log.setLevel(level)
+    if log_file:
+        os.makedirs(os.path.dirname(log_file) or '.', exist_ok=True)
+        handler = logging.FileHandler(log_file, encoding='utf-8')
+        handler.setFormatter(logging.Formatter(FORMAT))
+        log.addHandler(handler)
+    return log
+
+
+def get_logger(name: str = 'server') -> logging.Logger:
+    """获取指定名称的 logger"""
+    return logging.getLogger(name)
