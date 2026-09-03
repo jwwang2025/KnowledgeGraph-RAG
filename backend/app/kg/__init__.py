@@ -1,10 +1,3 @@
-"""
-KG 模块 - 知识图谱组件
-
-包含:
-- graph_utils: 图谱工具函数
-"""
-
 from .graph_utils import (
     search_node_item,
     convert_graph_to_triples,

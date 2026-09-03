@@ -14,17 +14,14 @@ import json
 from typing import List, Optional, Generator, Tuple, Any, Dict
 from config.settings import settings
 
-# 全局变量（模型加载后赋值）
 model = None
 tokenizer = None
 init_history = None
 
-# 延迟初始化组件
 rag_engine = None
 langchain_adapter = None
 langsmith_manager = None
 
-# ==================== 常量 ====================
 NER_ETYPES = ["物体类", "人物类", "地点类", "组织机构类", "事件类", "世界地区类", "术语类"]
 REF_MARKER = "===参考资料==="
 FALLBACK_PROMPT_TEMPLATE = (
@@ -33,7 +30,7 @@ FALLBACK_PROMPT_TEMPLATE = (
 )
 PRE_PROMPT = "你叫 ChatKG，是一个图谱问答机器人，此为背景。下面开始聊天吧！"
 
-# ==================== 共享检索组件（模块级单例，避免每次请求重建） ====================
+# 模块级单例，避免每次请求重建
 _ner = None
 _wiki_searcher = None
 _image_searcher = None
@@ -163,7 +160,6 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
         "metadata": {}
     }
 
-    # ==================== Adaptive-RAG 检索阶段 ====================
     chat_input = user_input
     use_retrieval = False
     rag_metadata = {}
@@ -240,7 +236,6 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
             print(f"[Adaptive-RAG 错误] {e}")
             base_result["metadata"]["rag_error"] = str(e)
 
-    # ==================== LangChain RAG Chain (可选) ====================
     if use_langchain and not use_retrieval:
         try:
             init_langchain_adapter()
@@ -250,7 +245,6 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
             print(f"[LangChain 错误] {e}")
             base_result["metadata"]["langchain_error"] = str(e)
 
-    # ==================== 备用检索方案 (Adaptive-RAG 未启用或失败时) ====================
     if not use_retrieval and model is not None:
         try:
             ref = _fallback_retrieval(user_input)
@@ -260,13 +254,11 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
         except Exception as e:
             print(f"[备用检索错误] {e}")
 
-    # ==================== 图像搜索 (始终执行) ====================
     try:
         base_result["image"] = _get_image_searcher().search(user_input)
     except Exception as e:
         print(f"[图像搜索错误] {e}")
 
-    # ==================== Wikipedia 搜索 (无检索结果时) ====================
     wiki = None
     if not use_retrieval or not rag_metadata.get("has_wiki"):
         try:
@@ -290,7 +282,6 @@ def stream_predict(user_input: str, history: List[Tuple[str, str]] = None,
 
     base_result["wiki"] = wiki or {"title": "无相关信息", "summary": "暂无相关描述"}
 
-    # ==================== 模型生成阶段 ====================
     if model is not None:
         # 清理历史记录中的参考资料部分
         clean_history = [
@@ -326,7 +317,6 @@ def _fallback_retrieval(user_input: str) -> str:
         entities = _get_ner().get_entities(user_input, etypes=NER_ETYPES)
         print(f"[备用检索] 实体: {entities}")
 
-        # 1. 知识图谱三元组检索
         triples = []
         graph = {'nodes': [], 'links': [], 'sents': []}
 
@@ -343,7 +333,6 @@ def _fallback_retrieval(user_input: str) -> str:
             triples_str = "；".join(f"({t[0]} {t[1]} {t[2]})" for t in triples)
             ref += f"三元组信息：{triples_str}；"
 
-        # 2. 向量数据库检索
         try:
             search_results = _get_vector_searcher().search(user_input, top_k=3)
             if search_results and search_results.get('documents') and search_results['documents'][0]:
@@ -359,8 +348,6 @@ def _fallback_retrieval(user_input: str) -> str:
 
     return ref
 
-
-# ==================== LangChain RAG Chain 便捷函数 ====================
 
 def get_langchain_rag_chain(
     template_type: str = "rag",
@@ -392,8 +379,6 @@ def invoke_langchain_rag(query: str, history: List[tuple] = None) -> Dict[str, A
     except Exception as e:
         return {"error": str(e)}
 
-
-# ==================== 生命周期管理 ====================
 
 def start_model():
     """启动并加载 ChatGLM 模型，并预热 RAG / LangChain / LangSmith 组件"""
@@ -452,16 +437,13 @@ def start_model():
 
     model.eval()
 
-    # 初始化对话
     _, history = predict(PRE_PROMPT, [])
     init_history = history
 
-    # 预热 RAG 引擎
     print("预热 Adaptive-RAG 引擎...")
     _ = init_rag_engine()
     print("Adaptive-RAG 引擎就绪")
 
-    # 预热 LangChain 适配器 (可选)
     print("预热 LangChain 组件...")
     try:
         _ = init_langchain_adapter()
@@ -469,7 +451,6 @@ def start_model():
     except Exception as e:
         print(f"[警告] LangChain 组件初始化失败: {e}")
 
-    # 初始化 LangSmith 追踪
     print("初始化 LangSmith 追踪...")
     try:
         _ = init_langsmith()

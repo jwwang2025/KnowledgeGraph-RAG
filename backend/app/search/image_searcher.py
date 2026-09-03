@@ -1,6 +1,5 @@
 """图像搜索：基于关键词匹配的静态图库。"""
 
-# 静态关键词 -> 图片 URL 映射（模块级常量，实例间共享）
 IMAGE_PAIRS = {
     "江南大学": "https://xerrors.oss-cn-shanghai.aliyuncs.com/imgs/20230411102806.png",
     "军舰": "https://xerrors.oss-cn-shanghai.aliyuncs.com/imgs/20230411102751.png",

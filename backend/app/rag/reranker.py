@@ -13,19 +13,17 @@ from .fusion import FusionItem, ResultType
 
 class RerankModel(Enum):
     """重排序模型枚举"""
-    COHERE = "cohere"                  # Cohere API
-    LOCAL_SIMILARITY = "local"         # 本地相似度计算
-    HYBRID = "hybrid"                   # 混合模式
+    COHERE = "cohere"
+    LOCAL_SIMILARITY = "local"
+    HYBRID = "hybrid"
 
 
-# 本地重排序的停用词
 _LOCAL_STOPWORDS = frozenset('的是在了和与或有')
 
-# 结果类型权重（三元组通常更精确）与排序优先级
+# 三元组通常更精确，给予更高权重
 _TYPE_WEIGHTS = {ResultType.TRIPLE: 1.2, ResultType.WIKI: 0.9}
 _TYPE_PRIORITY = {ResultType.TRIPLE: 0, ResultType.WIKI: 1, ResultType.DOCUMENT: 2}
 
-# 类型多样性配置
 _DIVERSITY_TYPES = (ResultType.TRIPLE, ResultType.DOCUMENT, ResultType.WIKI)
 _MAX_PER_TYPE = 5
 
@@ -115,8 +113,7 @@ class CohereReranker:
         self.enable_local_fallback = enable_local_fallback
         self._client = None
 
-        # 配置
-        self.truncation = True  # 是否截断过长文本
+        self.truncation = True
 
     @property
     def client(self):
@@ -140,7 +137,6 @@ class CohereReranker:
         # 限制候选数量以节省 API 调用成本
         candidates = candidates[:min(len(candidates), 100)]
 
-        # 尝试使用 Cohere API，不可用时回退本地方案
         if self.client and self.api_key:
             try:
                 results = self._rerank_with_cohere(query, candidates, top_k, return_documents)
@@ -150,7 +146,6 @@ class CohereReranker:
         else:
             results = self._rerank_locally(query, candidates, top_k)
 
-        # 更新结果位置
         for idx, item in enumerate(results):
             item.rerank_position = idx
 
@@ -178,7 +173,6 @@ class CohereReranker:
             new_item.combined_score = rerank_score
             results.append(new_item)
 
-        # 按得分降序排列
         results.sort(key=lambda x: x.rrf_score, reverse=True)
 
         return results[:top_k]
@@ -189,34 +183,27 @@ class CohereReranker:
         scored_items = []
 
         for idx, item in enumerate(candidates):
-            # 1. 关键词匹配得分
             keyword_score = self._calculate_keyword_match(query, item.content)
 
-            # 2. 实体匹配得分
             entity_score = self._calculate_entity_match(query, item.content, item.entities)
 
-            # 3. 类型权重 + 4. 综合得分
             type_weight = _TYPE_WEIGHTS.get(item.result_type, 1.0)
             local_score = keyword_score * 0.4 + entity_score * 0.4 + type_weight * 0.2
 
-            # 结合原始 RRF 得分
             combined_score = item.rrf_score * 0.3 + local_score * 0.7
 
-            # 创建副本并更新得分
             new_item = deepcopy(item)
             new_item.rrf_score = combined_score
             new_item.combined_score = combined_score
 
             scored_items.append((combined_score, idx, new_item))
 
-        # 按得分降序排列，返回前 k 条
         scored_items.sort(key=lambda x: x[0], reverse=True)
 
         return [item for _, _, item in scored_items[:top_k]]
 
     def _calculate_keyword_match(self, query: str, content: str) -> float:
         """计算关键词匹配得分（基于查询 n-gram 在内容中的出现情况）"""
-        # 提取查询关键词 (2-4字词)
         query_keywords = []
         for i in range(len(query)):
             for length in [4, 3, 2]:
@@ -242,9 +229,8 @@ class CohereReranker:
         if entities:
             entity_score = sum(1 for e in entities if e in content_lower) / len(entities)
         else:
-            entity_score = 0.5  # 无实体信息时的默认分
+            entity_score = 0.5
 
-        # 检查查询中的专有名词（连续汉字词）
         proper_nouns = re.findall(r'[\u4e00-\u9fff]{2,}', query)
         if proper_nouns:
             proper_noun_score = sum(1 for pn in proper_nouns if pn in content_lower) / len(proper_nouns)
@@ -261,10 +247,8 @@ class CohereReranker:
 
         start_time = time.time()
 
-        # 执行重排序
         results = self.rerank(query, candidates, top_k)
 
-        # 构建报告
         report = RerankReport(
             query=query,
             model_used=RerankModel.COHERE if self.client else RerankModel.LOCAL_SIMILARITY,
@@ -273,14 +257,12 @@ class CohereReranker:
             rerank_time=time.time() - start_time
         )
 
-        # 计算统计信息
         if results:
             scores = [item.rrf_score for item in results]
             report.avg_score = sum(scores) / len(scores)
             report.max_score = max(scores)
             report.min_score = min(scores)
 
-            # 得分分布
             report.score_distribution = {
                 "high (>0.7)": sum(1 for s in scores if s > 0.7),
                 "medium (0.4-0.7)": sum(1 for s in scores if 0.4 <= s <= 0.7),
@@ -320,14 +302,13 @@ class SelfRAGRefiner:
         if not items:
             return []
 
-        # 1. 过滤低相关性（过滤后太少则保留阈值以下结果）
+        # 过滤后太少则保留阈值以下结果
         filtered = [item for item in items if item.rrf_score >= self.relevance_threshold]
         if len(filtered) < min_count:
             filtered = items[:max(min_count, len(filtered))]
         else:
             filtered = filtered[:max_count]
 
-        # 2. 确保类型多样性 + 3. 调整顺序
         refined = self._ensure_diversity(filtered)
         refined = self._optimize_order(refined)
 
@@ -339,7 +320,6 @@ class SelfRAGRefiner:
         for item in items:
             by_type[item.result_type].append(item)
 
-        # 每个类型至少保留一个（如果有），最多 _MAX_PER_TYPE 条
         result = []
         for type_items in by_type.values():
             if type_items:
@@ -355,8 +335,6 @@ class SelfRAGRefiner:
 
         return sorted(items, key=lambda x: (_TYPE_PRIORITY.get(x.result_type, 3), -x.rrf_score))
 
-
-# ==================== 便捷函数 ====================
 
 def create_reranker(api_key: Optional[str] = None,
                    model: str = "rerank-multilingual-v3.0",

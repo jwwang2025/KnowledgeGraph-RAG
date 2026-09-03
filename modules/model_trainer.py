@@ -29,10 +29,9 @@ class ModelTrainer:
         self.test_file = os.path.join(output_dir, "test.json")
 
         self.prediction = os.path.join(output_dir, 'prediction.json') # 或者 .pickle
-        self.test_result_format = os.path.join(output_dir, 'test_result_format.json')# 保存了测试结果的文件
+        self.test_result_format = os.path.join(output_dir, 'test_result_format.json')
         self.test_result_refine = os.path.join(output_dir, 'test_result_refine.json')
 
-        # 这个是保存了关系的 id 与类别的映射表的文件alphabet.json
         self.data_instance_path = os.path.join(output_dir, 'alphabet.json')
         self.final_knowledge_graph = os.path.join(output_dir, 'knowledge_graph.json')
 
@@ -83,7 +82,6 @@ class ModelTrainer:
             lines_num = random.sample([json.loads(line) for line in file_lines], len(file_lines))
 
         # dataset_length = len(lines)
-        # 按照 4:1:5 的比例切分数据集，并分别保存到三个路径里面
         assert lines_num is not None, "数据集为空"
 
 
@@ -116,18 +114,13 @@ class ModelTrainer:
         将预测得到的结果跟测试集对齐后去除重复的三元组，保存到 knowledge_graph.json 文件中
 
         """
-        # 读取测试集
         with open(self.test_file, 'r', encoding='utf-8') as f:
             test_lines = [json.loads(line) for line in f.readlines()]
 
-
-        # 读取SPN的预测结果
         with open(self.prediction, 'r', encoding='utf-8') as f:
             prediction = json.load(f)
 
-        # 将预测结果转化为SPN训练时的style，返回数组
-        #
-        test_pred_lines = {} # 保存prediction里面需要的部分
+        test_pred_lines = {}
         for key, values in prediction.items():
             pred_relation = []
             for value in values:
@@ -139,7 +132,6 @@ class ModelTrainer:
                 pred_relation.append([pred_rel, head_start_index, head_end_index, tail_start_index, tail_end_index])
             test_pred_lines.update({key: pred_relation})
 
-        # 检查测试集和预测结果的数量是否匹配
         test_lines_count = len(test_lines)
         prediction_count = len(prediction)
         if test_lines_count != prediction_count:
@@ -153,8 +145,7 @@ class ModelTrainer:
         with open(self.data_instance_path, 'r', encoding='utf-8') as f:
             id2rel = json.load(f)["instances"]
 
-        # 将预测结果与测试集对齐
-        pred_lines = []  # 保存SPN style的预测结果
+        pred_lines = []
         for test_line, pred in zip(test_lines, list(test_pred_lines.values())):
 
             triples = []
@@ -164,12 +155,10 @@ class ModelTrainer:
                 assert triple_pred[1] <= triple_pred[2] and triple_pred[3] <= triple_pred[4], "预测的三元组有误"
                 triple = {"em1Text": test_line["sentText"][triple_pred[1]:triple_pred[2]+1],
                           "em2Text": test_line["sentText"][triple_pred[3]:triple_pred[4]+1],
-                          "label": id2rel[triple_pred[0]]}  # 保存单个三元组
+                          "label": id2rel[triple_pred[0]]}
 
                 if triple not in triples and len(triple["em1Text"].split()) > 0 and len(triple["em2Text"].split()) > 0:
                     triples.append(triple)
-
-            # 另pred_lines的"id"的值和test_lines的"id"的值一样
 
             pred_line["id"] = test_line["id"]
             pred_line["relationMentions"] = triples
@@ -177,14 +166,13 @@ class ModelTrainer:
             # eg. pred_lines = [{"id": 0, "relationMentions": [{"em1Text": "美国", "em2Text": "中国", "label": "国籍}]}]
             pred_lines.append(pred_line)
 
-        # 去除origin_lines里面跟pred_lines重复的relationMentions项
         # eg. origin_lines = [{"id": 0,"sentText":"xxxxxx", "relationMentions": [{"em1Text": "美国", "em2Text": "中国", "label": "国籍}]}]
         with open(self.data_path, 'r', encoding='utf-8') as f:
             origin_lines = [json.loads(l) for l in f.readlines()]
 
         diff_lines = []
         for pred_line in pred_lines:
-            origin_line = origin_lines[pred_line["id"]]# 通过id找到对应的origin_line
+            origin_line = origin_lines[pred_line["id"]]
             assert origin_line["id"] == pred_line["id"]
 
             diff_line = pred_line.copy()
@@ -196,14 +184,11 @@ class ModelTrainer:
 
             diff_line["relationMentions"] = diff_rels
 
-            # 保存 diff_line 到 diff_lines 里面
             diff_lines.append(diff_line)
 
-        # 去除diff_lines里面不匹配的relationMentions项
         # 使用与训练相同的本地/自定义模型路径，避免离线环境去下载
         diff_lines = auto_filter(diff_lines, self.model_name_or_path)
 
-        # 将 test_lines 保存到文件里面
         self.save_data(diff_lines, self.test_result_format)
 
         # """save_data(test_pred_lines, test_result_format) """
@@ -214,7 +199,6 @@ class ModelTrainer:
         """将生成的 test_result_format 重新经过一遍人工清洗"""
         refine_knowledge_graph(self.test_result_format, self.test_result_refine, fast_mode=True)
 
-        # 然后跟 self.data_path 里面的 relations 合并，合并后保存到 self.final_knowledge_graph 里面
         with open(self.data_path, 'r', encoding='utf-8') as f:
             origin_lines = [json.loads(l) for l in f.readlines()]
 
@@ -228,7 +212,6 @@ class ModelTrainer:
                     origin_line["relationMentions"].extend(test_result_refine_line["relationMentions"])
                     break
 
-        # 将origin_res保存到文件里面
         self.save_data(origin_lines, self.final_knowledge_graph)
 
         return self.final_knowledge_graph

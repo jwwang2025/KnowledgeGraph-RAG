@@ -1,9 +1,7 @@
-# coding=utf-8
 from flask import Flask, jsonify
 from flask_cors import CORS
 
 apps = Flask(__name__)
-# 解决跨域问题（Flask 默认不支持跨域）
 CORS(apps, resources=r'/*')
 
 from app.views import chat, graph

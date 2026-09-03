@@ -8,18 +8,15 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 
-# 模型保存路径（相对于项目根目录）
 # 获取项目根目录（脚本位于 models/model-download/，向上两级到项目根目录）
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 MODEL_DIR = PROJECT_ROOT / "models" / "uie-base"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
-# Hugging Face 模型仓库URL
 # 使用镜像站（hf-mirror.com）以提高下载速度
 # https://hf-mirror.com/xusenlin/uie-base/tree/main
 BASE_URL = "https://hf-mirror.com/xusenlin/uie-base/resolve/main"
 
-# 必需的文件列表
 REQUIRED_FILES = [
     "config.json",
     "tokenizer_config.json",
@@ -40,7 +37,6 @@ CUSTOM_CODE_FILES = [
     "decode_utils.py",  # 解码工具
 ]
 
-# 所有需要下载的文件
 FILES_TO_DOWNLOAD = REQUIRED_FILES + MODEL_FILES + CUSTOM_CODE_FILES
 
 def download_file(url, save_path):
@@ -77,7 +73,6 @@ def main():
         file_path = MODEL_DIR / filename
         file_url = f"{BASE_URL}/{filename}"
         
-        # 如果文件已存在，询问是否跳过
         if file_path.exists():
             file_size = file_path.stat().st_size / (1024 * 1024)  # MB
             print(f"\n文件已存在: {file_path} ({file_size:.1f} MB)")

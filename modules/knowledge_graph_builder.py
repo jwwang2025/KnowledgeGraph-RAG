@@ -20,13 +20,12 @@ class KnowledgeGraphBuilder:
 
         """
         # self.args = args # 不能被序列化
-        # 使用配置中的数据目录
         data_dir = settings.DATA_DIR
-        self.data_dir = os.path.join(str(data_dir), args.project)  # 存放生成的数据的地方
-        self.text_path = str(settings.RAW_DATA_PATH)  # 原始的文本文件
-        self.base_kg_path = os.path.join(self.data_dir, "base.json") # 生成的三元组文件
-        self.refined_kg_path = os.path.join(self.data_dir, "base_refined.json")# 筛选过后的三元组文件
-        self.filtered_kg_path = os.path.join(self.data_dir, "base_filtered.json") # 仅过滤无筛选的三元组文件
+        self.data_dir = os.path.join(str(data_dir), args.project)
+        self.text_path = str(settings.RAW_DATA_PATH)
+        self.base_kg_path = os.path.join(self.data_dir, "base.json")
+        self.refined_kg_path = os.path.join(self.data_dir, "base_refined.json")
+        self.filtered_kg_path = os.path.join(self.data_dir, "base_filtered.json")
 
         # 优先使用本地模型路径，如果不存在则使用配置中的模型名称（会从HuggingFace下载）
         bert_model_name = settings.BERT_MODEL_NAME
@@ -37,8 +36,8 @@ class KnowledgeGraphBuilder:
         else:
             self.model_name_or_path = bert_model_name  # 使用配置中的模型名称
             print(f"使用模型名称（将从HuggingFace下载）: {self.model_name_or_path}")
-        self.version = 0    # 会随着迭代次数的增加而增加
-        self.kg_paths = [] # 一个数组，代表不同迭代版本的知识图谱
+        self.version = 0
+        self.kg_paths = []
         self.gpu = args.gpu if args.gpu else settings.DEFAULT_GPU
 
         os.makedirs(self.data_dir, exist_ok=True)
@@ -54,7 +53,6 @@ class KnowledgeGraphBuilder:
 
         print(ct.green("Start Running Iteration:"), ct.yellow(f"v{self.version}"))
 
-        # 如果是第一次迭代，那么就直接读取 refined_kg_path
         cur_data_path = self.kg_paths[-1] if self.version > 0 else self.refined_kg_path
         cur_out_path = os.path.join(self.data_dir, f"iteration_v{self.version}")
 
@@ -86,8 +84,8 @@ class KnowledgeGraphBuilder:
         pre_kg = self.kg_paths[-2]
         cur_kg = self.kg_paths[-1]
 
-        total_rel = 0  # 图谱中的所有三元组的数量（之前的）
-        extend_rel = 0 # 图谱中扩展的三元组的数量
+        total_rel = 0
+        extend_rel = 0
         with open(pre_kg, 'r', encoding='utf-8') as f_pre, open(cur_kg, 'r', encoding='utf-8') as f_cur:
             pre_lines = [json.loads(line) for line in f_pre.readlines()]
             cur_lines = [json.loads(line) for line in f_cur.readlines()]
@@ -110,13 +108,9 @@ class KnowledgeGraphBuilder:
         input: self.text_path
         output: self.refined_kg_path
         """
-        # 1. 清洗文本，切分句子为指定长度
         texts = process_text(self.text_path, 480)
 
-        # 3. 喂给 UIE 并得到 relations，注意这里要保存句子的 id（从 0 开始算
-        #    注意：这里如果发现已经存在了 self.base_kg_path，就跳过 UIE
-        #    如果想要重新使用 UIE 抽取，删掉这个文件就行
-
+        # 如果 base_kg_path 已存在则跳过 UIE，删除该文件可重新抽取
         if not os.path.exists(self.base_kg_path):
             all_items = uie_execute(texts)
             with open(self.base_kg_path, 'w', encoding='utf-8') as f:
@@ -125,18 +119,16 @@ class KnowledgeGraphBuilder:
         else:
             print(f"Base KG already exists in {self.base_kg_path}, skip UIE.")
 
-        # 4. 算法验证，使用 bertTokenizer 检测一下实体是否还存在于句子里面，并将过滤过的结果保存到 self.filtered_kg_path路径下
         with open(self.base_kg_path, 'r', encoding='utf-8') as f:
             all_items = [json.loads(line) for line in f.readlines()]
             filtered_items = auto_filter(all_items, self.model_name_or_path)
 
-        # 将filtered_items保存到文件中
         with open(self.filtered_kg_path, 'w', encoding='utf-8') as f:
             for item in filtered_items:
                 f.writelines(json.dumps(item, ensure_ascii=False) + "\n")
 
 
-        # 5. 人工筛选并保存，因为需要加断点，所以需要一边做一边保存
+        # 人工筛选需要加断点，所以需要一边做一边保存
         refine_knowledge_graph(self.filtered_kg_path, self.refined_kg_path, fast_mode=True)
 
     def save(self, save_path=None):
@@ -156,4 +148,4 @@ class KnowledgeGraphBuilder:
     def load(self, load_path=None):
         with open(load_path, "r", encoding="utf-8") as f:
             state = json.load(f)
-        self.__dict__.update(state)# 作用是将 state 中的键值对更新到 self.__dict__ 中
+        self.__dict__.update(state)

@@ -63,16 +63,13 @@ class HierarchicalVectorIndex:
 
         self.multi_repr_builder = MultiRepresentationBuilder(self.encoder)
 
-        # 索引层级映射
         self.levels = {"sentence": 1, "chunk": 2, "document": 3}
 
-        # ChromaDB 客户端和 Collection 映射
         self._client = None
         self._collections: Dict[str, Collection] = {}
         self._index_metadata = {}
         self._hybrid_encoder = None
 
-        # 索引目录
         self.index_dir = os.path.join(persist_dir, project_name, "hierarchical_index")
         self.metadata_dir = os.path.join(self.index_dir, "metadata")
 
@@ -187,7 +184,6 @@ class HierarchicalVectorIndex:
                 "item_id": item_id
             }
 
-            # 多表征或单表征，统一为 {repr_type: embedding} 处理
             if self.enable_multi_representation and len(representations) > 1:
                 embeddings_dict = self.encoder.encode_multi_representation(item, representations)
             else:

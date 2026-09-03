@@ -13,9 +13,6 @@ def yellow(text):
 def blue(text):
     return "\033[34m" + str(text) + "\033[0m"
 
-# 打印紫色字体
-
-
 def purple(text):
     return "\033[35m" + str(text) + "\033[0m"
 

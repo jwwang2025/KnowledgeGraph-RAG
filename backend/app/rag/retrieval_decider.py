@@ -13,7 +13,6 @@ from app.search import VectorSearcher, WikiSearcher, ImageSearcher
 from app.kg import search_node_item, convert_graph_to_triples
 from app.nlp import Ner
 
-# NER 实体类型配置
 _KG_ENTITY_TYPES = ["物体类", "人物类", "地点类", "组织机构类", "事件类", "世界地区类", "术语类"]
 _WIKI_ENTITY_TYPES = ["物体类", "人物类", "地点类", "组织机构类"]
 
@@ -25,7 +24,6 @@ _SOURCE_ERROR_LABELS = {
     "image": "图像",
 }
 
-# 简繁转换器（懒加载缓存）
 _opencc_converter = None
 
 
@@ -45,54 +43,51 @@ def _build_wiki_wrapper(top_k: int = 3):
 
 class RetrievalStatus(Enum):
     """检索状态枚举"""
-    PENDING = "pending"           # 待检索
-    IN_PROGRESS = "in_progress"   # 检索中
-    COMPLETED = "completed"       # 已完成
-    FAILED = "failed"             # 失败
-    SKIPPED = "skipped"           # 跳过
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
 
 
 @dataclass
 class RetrievalResult:
     """单条检索结果"""
-    source: str                          # 知识源标识
-    status: RetrievalStatus              # 检索状态
-    data: Any                            # 检索到的数据
-    metadata: Dict[str, Any] = field(default_factory=dict)  # 元数据
-    error: Optional[str] = None          # 错误信息
-    elapsed_time: float = 0.0            # 检索耗时(秒)
+    source: str
+    status: RetrievalStatus
+    data: Any
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    error: Optional[str] = None
+    elapsed_time: float = 0.0
 
 
 @dataclass
 class MultiSourceRetrievalResult:
     """多源检索结果聚合"""
-    query: str                           # 原始查询
-    plan: RetrievalPlan                  # 检索计划
-    results: Dict[str, RetrievalResult]  # 各知识源结果
-    total_time: float = 0.0              # 总耗时
+    query: str
+    plan: RetrievalPlan
+    results: Dict[str, RetrievalResult]
+    total_time: float = 0.0
 
-    # 聚合后的数据
-    triples: List[tuple] = field(default_factory=list)       # 知识图谱三元组
-    documents: List[str] = field(default_factory=list)       # 文档片段
-    wiki_summary: Optional[str] = None                       # Wikipedia摘要
-    image_url: Optional[str] = None                          # 图片URL
+    triples: List[tuple] = field(default_factory=list)
+    documents: List[str] = field(default_factory=list)
+    wiki_summary: Optional[str] = None
+    image_url: Optional[str] = None
 
-    # 质量指标
-    total_sources_used: int = 0                              # 使用的知识源数量
-    has_structured_knowledge: bool = False                   # 是否有结构化知识
-    has_unstructured_knowledge: bool = False                 # 是否有非结构化知识
+    total_sources_used: int = 0
+    has_structured_knowledge: bool = False
+    has_unstructured_knowledge: bool = False
 
-    # 引用溯源
-    citation_context: CitationContext = field(default_factory=CitationContext)  # 引用上下文
-    relevance_scores: Dict[str, List[float]] = field(default_factory=dict)      # 各源的相关性得分
+    citation_context: CitationContext = field(default_factory=CitationContext)
+    relevance_scores: Dict[str, List[float]] = field(default_factory=dict)
 
     # ========== 多轮检索相关字段 (Self-RAG) ==========
-    fusion_result: Optional[FusionResult] = None              # RRF 融合结果
-    reranked_items: List[FusionItem] = field(default_factory=list)  # 重排序后的结果
-    rerank_report: Optional[RerankReport] = None              # 重排序报告
+    fusion_result: Optional[FusionResult] = None
+    reranked_items: List[FusionItem] = field(default_factory=list)
+    rerank_report: Optional[RerankReport] = None
 
-    enable_multi_round: bool = False                          # 是否启用多轮检索
-    multi_round_config: Dict[str, Any] = field(default_factory=dict)  # 配置信息
+    enable_multi_round: bool = False
+    multi_round_config: Dict[str, Any] = field(default_factory=dict)
 
     def get_combined_context(self) -> str:
         """生成合并后的上下文字符串"""
@@ -140,29 +135,24 @@ class RetrievalDecider:
         self.project_name = project_name
         self.vector_db_path = vector_db_path
 
-        # 多轮检索配置 (Self-RAG)
         self.enable_multi_round = enable_multi_round
         self.multi_round_config = {
-            "rrf_k": 60.0,                 # RRF 平滑因子
-            "dedup_threshold": 0.85,       # 去重相似度阈值
+            "rrf_k": 60.0,
+            "dedup_threshold": 0.85,
             "cohere_model": cohere_model,
             "cohere_api_key": cohere_api_key,
-            "final_top_k": 10,             # 最终返回数量
-            "fusion_candidates": 50        # 融合候选数量
+            "final_top_k": 10,
+            "fusion_candidates": 50
         }
 
-        # 延迟初始化的组件
         self._vector_searcher = None
         self._ner = None
         self._wiki_searcher = None
         self._image_searcher = None
 
-        # 多轮检索组件 (延迟初始化)
         self._fusion_engine = None
         self._reranker = None
         self._refiner = None
-
-    # ========== 延迟加载组件 ==========
 
     @property
     def vector_searcher(self) -> VectorSearcher:
@@ -190,8 +180,6 @@ class RetrievalDecider:
         if self._image_searcher is None:
             self._image_searcher = ImageSearcher()
         return self._image_searcher
-
-    # ========== 多轮检索组件 (延迟初始化) ==========
 
     @property
     def fusion_engine(self) -> RRFusion:
@@ -224,8 +212,6 @@ class RetrievalDecider:
             self._refiner = SelfRAGRefiner(relevance_threshold=0.3)
         return self._refiner
 
-    # ========== 核心检索方法 ==========
-
     def retrieve(self, query: str, plan: RetrievalPlan) -> MultiSourceRetrievalResult:
         """执行多源自适应检索"""
         start_time = time.time()
@@ -238,20 +224,16 @@ class RetrievalDecider:
             multi_round_config=self.multi_round_config
         )
 
-        # 如果不需要检索，直接返回
         if not plan.need_retrieval:
             return result
 
-        # 按优先级执行各知识源检索
         for source in plan.priority_sources:
             retrieval_result = self._retrieve_from_source(query, source, plan)
             result.results[source] = retrieval_result
 
-            # 更新聚合数据
             if retrieval_result.status == RetrievalStatus.COMPLETED:
                 self._aggregate_result(result, source, retrieval_result)
 
-        # 多轮检索后处理 (Self-RAG)
         if self.enable_multi_round:
             result = self._apply_multi_round_processing(query, result)
 
@@ -266,14 +248,12 @@ class RetrievalDecider:
         """
         round_start = time.time()
 
-        # 准备各来源数据
         kg_results = result.triples
         vector_results = result.documents
         wiki_result = {"summary": result.wiki_summary} if result.wiki_summary else None
         vector_scores = result.relevance_scores.get("vector", [])
         top_k = self.multi_round_config.get("final_top_k", 10)
 
-        # 第一轮：RRF 融合
         fusion_result = self.fusion_engine.fuse(
             query=query,
             source_results={
@@ -294,7 +274,6 @@ class RetrievalDecider:
         if not candidates:
             return result
 
-        # 第二轮：语义重排序
         if self.reranker:
             try:
                 reranked_items, rerank_report = self.reranker.rerank_with_report(
@@ -311,7 +290,6 @@ class RetrievalDecider:
                       f"模型: {rerank_report.model_used.value}, "
                       f"耗时: {rerank_report.rerank_time:.3f}s")
 
-                # Self-RAG 精炼
                 refined_items = self.refiner.refine(
                     query=query,
                     items=reranked_items,
@@ -319,7 +297,6 @@ class RetrievalDecider:
                     max_count=top_k
                 )
 
-                # 更新结果
                 result.reranked_items = refined_items
                 result.triples, result.documents, result.wiki_summary = \
                     self._extract_refined_content(refined_items, kg_results, vector_results)
@@ -344,7 +321,6 @@ class RetrievalDecider:
 
         for item in items:
             if item.result_type == ResultType.TRIPLE:
-                # 从原始三元组中找到匹配的内容
                 for triple in original_triples:
                     triple_str = f"{triple[0]} {triple[1]} {triple[2]}"
                     if triple_str in item.content or item.content in triple_str:
@@ -385,7 +361,6 @@ class RetrievalDecider:
 
     def _retrieve_from_kg(self, query: str, plan: RetrievalPlan) -> RetrievalResult:
         """从知识图谱检索三元组：NER 识别实体 -> 图谱搜索 -> 转换为三元组"""
-        # 1. 识别实体
         entities = self.ner.get_entities(query, etypes=_KG_ENTITY_TYPES)
 
         if not entities:
@@ -396,12 +371,10 @@ class RetrievalDecider:
                 metadata={"entities_found": 0}
             )
 
-        # 2. 搜索图谱
         lite_graph = {'nodes': [], 'links': [], 'sents': []}
         for entity in entities[:5]:  # 限制实体数量
             lite_graph = search_node_item(entity, lite_graph if lite_graph['nodes'] else None)
 
-        # 3. 转换为三元组（主要针对前几个实体）并限制数量
         triples = []
         for entity in entities[:3]:
             triples += convert_graph_to_triples(lite_graph, entity)
@@ -436,7 +409,6 @@ class RetrievalDecider:
 
         documents = documents[:plan.max_docs]
 
-        # 获取相似度分数
         distances = search_results.get('distances', [[]])[0][:len(documents)] if documents else []
 
         return RetrievalResult(
@@ -469,7 +441,6 @@ class RetrievalDecider:
                 metadata={"found": False}
             )
 
-        # 简繁转换并截取摘要
         cc = _get_opencc()
         summary = cc.convert(wiki.summary)[:500]
 
@@ -565,8 +536,6 @@ class RetrievalDecider:
             for source, retrieval in result.results.items()
         }
 
-    # ========== 多轮检索控制方法 ==========
-
     def enable_multi_round_retrieval(self, enabled: bool = True):
         """启用/禁用多轮检索"""
         self.enable_multi_round = enabled
@@ -592,8 +561,6 @@ class RetrievalDecider:
                 "refiner": self._refiner is not None
             }
         }
-
-    # ========== LangChain 集成方法 ==========
 
     def get_langchain_retriever(self, source: str = "vector", **kwargs):
         """获取 LangChain Retriever（source: "vector" / "wiki"）"""

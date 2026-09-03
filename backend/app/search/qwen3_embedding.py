@@ -7,7 +7,6 @@ import numpy as np
 from typing import List, Dict, Optional, Union
 from collections import Counter
 
-# 预定义 prompt 模板
 PROMPT_TEMPLATES = {
     "retrieve.query": "query: {text}",
     "retrieve.passage": "passage: {text}",
@@ -163,14 +162,13 @@ class Qwen3EmbeddingEncoder:
 
         results: Dict[str, np.ndarray] = {}
 
-        # 1. 原始文本表征（其余表征在无内容时回退到它）
+        # 原始文本表征（其余表征在无内容时回退到它）
         if "original" in representations:
             results["original"] = self.encode(text)
 
         def fallback() -> np.ndarray:
             return results.get("original", self.encode(""))
 
-        # 2-4. 关键词/实体/三元组表征
         extractors = {
             "keywords": self._extract_keywords,
             "entities": self._extract_entities,
@@ -181,12 +179,10 @@ class Qwen3EmbeddingEncoder:
                 items = extractor(text)
                 results[name] = self.encode(" ".join(items)) if items else fallback()
 
-        # 5. 摘要表征
         if "summary" in representations:
             summary = self._generate_summary(text)
             results["summary"] = self.encode(summary) if summary else fallback()
 
-        # 6. 问句表征 (query-oriented)
         if "query" in representations:
             results["query"] = self.encode(f"query: {text}", prompt_name="asymmetric")
 
@@ -289,7 +285,6 @@ class HybridEncoder:
 
     def _compute_sparse_vectors(self, texts: List[str]) -> np.ndarray:
         """计算 BM25 风格稀疏向量"""
-        # 构建词表
         vocab: Dict[str, int] = {}
         tokenized = [self._tokenize(text) for text in texts]
         for tokens in tokenized:
@@ -297,7 +292,6 @@ class HybridEncoder:
                 if token not in vocab:
                     vocab[token] = len(vocab)
 
-        # IDF
         N = len(texts)
         idf = {}
         for token in vocab:

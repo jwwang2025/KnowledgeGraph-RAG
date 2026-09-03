@@ -20,8 +20,6 @@ def refine_knowledge_graph(kg_path, refined_kg_path, fast_mode=True):
     fast_mode: 如果为 True，直接写入
     """
 
-    # 判断是否继续
-
     print(f"源数据：{kg_path}")
     print(f"筛选后数据：{refined_kg_path}\n")
 

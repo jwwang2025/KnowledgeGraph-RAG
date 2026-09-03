@@ -6,7 +6,6 @@ import os
 import sys
 from pathlib import Path
 
-# 获取项目根目录
 # 使用 resolve() 确保路径是绝对路径
 PROJECT_ROOT = Path(__file__).resolve().parent
 MODEL_DIR = PROJECT_ROOT / "models" / "chatglm-6b"
@@ -17,7 +16,6 @@ def check_model_files():
     print("步骤 1: 检查模型文件完整性")
     print("=" * 60)
     
-    # 必需的关键文件
     critical_files = [
         "config.json",
         "tokenizer_config.json",
@@ -38,7 +36,6 @@ def check_model_files():
             print(f"✗ {filename} (缺失)")
             missing_files.append(filename)
     
-    # 检查权重分片文件
     print("\n检查模型权重分片文件:")
     missing_weight_files = []
     for i in range(1, 9):
@@ -86,7 +83,6 @@ def test_model_loading():
         )
         print("✓ 模型加载成功")
         
-        # 检查CUDA是否可用
         if torch.cuda.is_available():
             print(f"检测到 GPU: {torch.cuda.get_device_name(0)}")
             print("正在将模型移至 GPU...")
@@ -118,7 +114,6 @@ def test_chat(model, tokenizer):
         return False
     
     try:
-        # 测试问题
         test_questions = [
             "你有什么用，你可以干什么，你是谁制作的",
             "请介绍一下你自己",
@@ -159,21 +154,17 @@ def main():
     print(f"模型目录: {MODEL_DIR}")
     print()
     
-    # 步骤1: 检查文件
     if not check_model_files():
         print("\n⚠ 模型文件不完整，请先完成下载")
         return
     
-    # 步骤2: 加载模型
     model, tokenizer = test_model_loading()
     if model is None or tokenizer is None:
         print("\n✗ 模型加载失败，请检查错误信息")
         return
-    
-    # 步骤3: 测试对话
+
     success = test_chat(model, tokenizer)
-    
-    # 最终结果
+
     print("\n" + "=" * 60)
     if success:
         print("🎉 测试完成：模型可用！")

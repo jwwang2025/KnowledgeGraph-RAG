@@ -1,7 +1,6 @@
 import re
 from zhconv import convert
 
-# 打开并删除文本中的特殊字符
 def clean_to_sentence(file_path):
     with open(file_path, 'r', encoding='utf-8') as f_in:
         dirty_text = f_in.read()
@@ -14,7 +13,6 @@ def clean_to_sentence(file_path):
     clean_sentences = split_pattern.split(clean_text)
     return clean_sentences
 
-# 将文本按照句子分割
 def add_sentences(sentences, max_line_length=480):
     current_line = ''
     output = []
@@ -27,7 +25,6 @@ def add_sentences(sentences, max_line_length=480):
         output.append(current_line.strip())
     return output
 
-# 将文本按照句子分割
 def process_text(input_file, max_line_length):
     sentences = clean_to_sentence(input_file)
     formatted_output = add_sentences(sentences, max_line_length)

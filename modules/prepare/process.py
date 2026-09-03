@@ -5,8 +5,6 @@ import torch
 from transformers import AutoModel, AutoTokenizer
 from config.settings import settings
 
-# ========== UIE 模型配置（PyTorch 版） ==========
-# 从配置系统获取 UIE 模型路径
 UIE_MODEL_NAME = settings.UIE_MODEL_NAME
 # 优先使用本地模型路径，如果不存在则使用模型名称（会从HuggingFace下载）
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -22,7 +20,6 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 _tokenizer = None
 _model = None
 _model_device = DEVICE
-# ==============================================
 
 
 def _load_uie_model():
@@ -47,7 +44,6 @@ def torch_relation_ie(content: List[str]):
     if isinstance(content, str):
         content = [content]
 
-    # 从配置系统获取 schema
     schema = settings.get_schema()
 
     return model.predict(
@@ -60,10 +56,9 @@ def torch_relation_ie(content: List[str]):
     )
 
 
-# 关系抽取并修改json文件
 def rel_json(content):
-    all_relations = [] # 定义一个空列表，用于存储每个chapter的关系信息
-    res_relation = torch_relation_ie(content)  # 传入文本进行关系识别
+    all_relations = []
+    res_relation = torch_relation_ie(content)
     for rel in res_relation:
         for sub_type, sub_rel in rel.items():
             for sub in sub_rel:
@@ -78,8 +73,6 @@ def rel_json(content):
     return all_relations
 
 
-# 执行函数
-# 
 def uie_execute(texts):
 
     sent_id = 0

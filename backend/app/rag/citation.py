@@ -8,23 +8,22 @@ from enum import Enum
 
 class CitationSource(Enum):
     """引用来源枚举"""
-    KNOWLEDGE_GRAPH = "knowledge_graph"    # 知识图谱三元组
-    VECTOR_DOCUMENT = "vector_document"    # 向量数据库文档
-    WIKIPEDIA = "wikipedia"               # Wikipedia 百科
-    IMAGE = "image"                        # 图像搜索
-    USER_HISTORY = "user_history"         # 用户历史对话
-    SYSTEM_CONTEXT = "system_context"      # 系统上下文
+    KNOWLEDGE_GRAPH = "knowledge_graph"
+    VECTOR_DOCUMENT = "vector_document"
+    WIKIPEDIA = "wikipedia"
+    IMAGE = "image"
+    USER_HISTORY = "user_history"
+    SYSTEM_CONTEXT = "system_context"
 
 
 class CitationType(Enum):
     """引用类型枚举"""
-    DIRECT_QUOTE = "direct_quote"          # 直接引用
-    INDIRECT_REFERENCE = "indirect_ref"    # 间接引用
-    SEMANTIC_MATCH = "semantic_match"      # 语义匹配
-    INFERRED = "inferred"                  # 推断生成
+    DIRECT_QUOTE = "direct_quote"
+    INDIRECT_REFERENCE = "indirect_ref"
+    SEMANTIC_MATCH = "semantic_match"
+    INFERRED = "inferred"
 
 
-# 各来源的显示图标
 _SOURCE_ICONS = {
     CitationSource.KNOWLEDGE_GRAPH: "📊",
     CitationSource.VECTOR_DOCUMENT: "📄",
@@ -36,28 +35,23 @@ _SOURCE_ICONS = {
 @dataclass
 class Citation:
     """单条引用记录：追踪回答中每个关键细节的来源"""
-    # 基础信息
-    source: CitationSource                  # 来源类型
-    source_id: str                          # 来源唯一标识（如文档ID、三元组哈希等）
-    source_name: str                        # 来源名称（如文档名、Wikipedia词条名）
+    source: CitationSource
+    source_id: str
+    source_name: str
 
-    # 内容信息
-    original_text: str                      # 原文内容
-    excerpt: str                            # 截取的引用片段
-    position: Tuple[int, int] = (0, 0)     # 在原文中的位置 (start, end)
+    original_text: str
+    excerpt: str
+    position: Tuple[int, int] = (0, 0)
 
-    # 关联信息
-    related_entities: List[str] = field(default_factory=list)  # 关联的实体列表
-    related_triples: List[tuple] = field(default_factory=list)  # 关联的三元组
+    related_entities: List[str] = field(default_factory=list)
+    related_triples: List[tuple] = field(default_factory=list)
 
-    # 质量指标
-    relevance_score: float = 0.0           # 相关性得分 (0-1)
-    confidence_score: float = 0.0           # 置信度得分 (0-1)
+    relevance_score: float = 0.0
+    confidence_score: float = 0.0
     citation_type: CitationType = CitationType.DIRECT_QUOTE
 
-    # 元数据
-    metadata: Dict[str, Any] = field(default_factory=dict)   # 附加元数据
-    retrieved_at: float = field(default_factory=time.time)      # 检索时间
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    retrieved_at: float = field(default_factory=time.time)
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典格式"""
@@ -96,14 +90,14 @@ def _truncate(text: str, limit: int) -> str:
 class CitationSet:
     """引用集合：支持按来源类型分组、排序、去重等操作"""
     citations: List[Citation] = field(default_factory=list)
-    query: str = ""                        # 关联的查询
+    query: str = ""
     generated_at: float = field(default_factory=time.time)
 
     def add(self, citation: Citation):
         """添加引用（按 source_id + excerpt 去重）"""
         for existing in self.citations:
             if existing.source_id == citation.source_id and existing.excerpt == citation.excerpt:
-                return  # 已存在，跳过
+                return
         self.citations.append(citation)
 
     def add_batch(self, citations: List[Citation]):
@@ -159,16 +153,13 @@ class CitationSet:
 @dataclass
 class CitationContext:
     """引用上下文：在 RAG 流程中收集和聚合引用"""
-    # 检索阶段收集的原始引用
     triples_citations: List[Citation] = field(default_factory=list)
     document_citations: List[Citation] = field(default_factory=list)
     wiki_citations: List[Citation] = field(default_factory=list)
     image_citations: List[Citation] = field(default_factory=list)
 
-    # 生成阶段嵌入的引用
     embedded_citations: List[Citation] = field(default_factory=list)
 
-    # 原始检索结果（用于回溯）
     raw_triples: List[tuple] = field(default_factory=list)
     raw_documents: List[str] = field(default_factory=list)
     raw_wiki: Optional[Dict[str, str]] = None
@@ -204,10 +195,8 @@ class CitationGenerator:
             s, p, o = triple[0], triple[1], triple[2]
             triple_str = f"{s}-{p}-{o}"
 
-            # 生成引用片段
             excerpt = f"({s} {p} {o})"
 
-            # 计算相关性得分
             relevance = relevance_scores[i] if relevance_scores and i < len(relevance_scores) else 0.8
 
             citations.append(Citation(
@@ -238,7 +227,6 @@ class CitationGenerator:
         for i, doc in enumerate(documents):
             source_id = doc_ids[i] if doc_ids and i < len(doc_ids) else f"doc_{i:03d}"
 
-            # 截取引用片段（取前100字符）
             excerpt = doc[:100] if len(doc) > 100 else doc
 
             relevance = relevance_scores[i] if relevance_scores and i < len(relevance_scores) else 0.7
@@ -271,7 +259,6 @@ class CitationGenerator:
         title = wiki_result["title"]
         summary = wiki_result.get("summary", "")
 
-        # 截取引用片段
         excerpt = summary[:150] if len(summary) > 150 else summary
 
         return Citation(
@@ -325,11 +312,9 @@ class CitationEmbedder:
         if not citations or not matched_segments:
             return text, []
 
-        # 按相关性排序并分配编号
         sorted_citations = _sorted_by_relevance(citations)
         citation_map = {c.source_id: idx + 1 for idx, c in enumerate(sorted_citations)}
 
-        # 替换匹配片段
         result_text = text
         used_indices = set()
 

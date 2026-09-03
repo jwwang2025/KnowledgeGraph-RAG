@@ -8,37 +8,31 @@ from enum import Enum
 
 class RelevanceLevel(Enum):
     """相关性等级枚举"""
-    HIGH = "high"           # 高度相关
-    MEDIUM = "medium"       # 中等相关
-    LOW = "low"             # 低相关
-    IRRELEVANT = "irrelevant"  # 不相关
-    UNKNOWN = "unknown"     # 未知
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    IRRELEVANT = "irrelevant"
+    UNKNOWN = "unknown"
 
 
 class ActionDecision(Enum):
     """行动决策枚举 (Self-RAG 核心)"""
-    # 使用检索结果
-    USE_RETRIEVAL = "use_retrieval"           # 使用检索结果生成
+    USE_RETRIEVAL = "use_retrieval"
 
-    # 不使用检索结果
-    USE_PARAMETRIC = "use_parametric"         # 使用模型参数知识
-    USE_HISTORY = "use_history"               # 使用对话历史
-    GENERATE_DIRECT = "generate_direct"       # 无需外部知识直接生成
+    USE_PARAMETRIC = "use_parametric"
+    USE_HISTORY = "use_history"
+    GENERATE_DIRECT = "generate_direct"
 
-    # 需要进一步行动
-    ITERATE_RETRIEVAL = "iterate_retrieval"   # 迭代检索（重新检索）
-    EXPAND_ENTITIES = "expand_entities"       # 扩展实体后再检索
-    SWITCH_SOURCE = "switch_source"           # 切换知识源
+    ITERATE_RETRIEVAL = "iterate_retrieval"
+    EXPAND_ENTITIES = "expand_entities"
+    SWITCH_SOURCE = "switch_source"
 
-    # 拒绝/无法回答
-    REFUSE = "refuse"                         # 无法回答
+    REFUSE = "refuse"
 
 
-# 停用词与标点（关键词提取用）
 _STOPWORDS = frozenset('的是在了和与或有吗呢吧啊')
 _PUNCT_CHARS = frozenset('，。！？、；：""''（）')
 
-# 实体词缀 (类型 -> 词缀列表)
 _ENTITY_SUFFIXES = {
     '人物': ['人', '者', '家', '师', '员', '生'],
     '组织': ['公司', '机构', '组织', '大学', '医院', '党', '会'],
@@ -46,7 +40,6 @@ _ENTITY_SUFFIXES = {
     '概念': ['主义', '论', '学', '理论', '方法', '技术'],
 }
 
-# 整体相关性聚合权重（高相关权重更高）
 _RELEVANCE_WEIGHTS = {
     RelevanceLevel.HIGH: 1.0,
     RelevanceLevel.MEDIUM: 0.6,
@@ -55,7 +48,6 @@ _RELEVANCE_WEIGHTS = {
     RelevanceLevel.UNKNOWN: 0.5,
 }
 
-# get_filtered_results 的最低置信度映射
 _FILTER_THRESHOLDS = {
     RelevanceLevel.HIGH: 1.0,
     RelevanceLevel.MEDIUM: 0.4,
@@ -77,40 +69,34 @@ class RelevanceScore:
     content: str                   # 内容摘要
     relevance: RelevanceLevel      # 相关性等级
     confidence: float              # 置信度 (0-1)
-    reasons: List[str] = field(default_factory=list)  # 判定原因
-    issues: List[str] = field(default_factory=list)    # 发现的问题
+    reasons: List[str] = field(default_factory=list)
+    issues: List[str] = field(default_factory=list)
 
-    # 详细评分维度
-    semantic_match: float = 0.0    # 语义匹配度 (0-1)
-    entity_match: float = 0.0     # 实体匹配度 (0-1)
-    completeness: float = 0.0     # 完整性 (0-1)
+    semantic_match: float = 0.0
+    entity_match: float = 0.0
+    completeness: float = 0.0
 
 
 @dataclass
 class EvaluationReport:
     """评估报告"""
-    query: str                               # 原始查询
-    question_type: str                       # 问题类型
+    query: str
+    question_type: str
 
-    # 检索结果评估
     triple_scores: List[RelevanceScore] = field(default_factory=list)
     document_scores: List[RelevanceScore] = field(default_factory=list)
     wiki_score: Optional[RelevanceScore] = None
 
-    # 聚合评估
     overall_relevance: RelevanceLevel = RelevanceLevel.UNKNOWN
     overall_confidence: float = 0.0
-    knowledge_sufficiency: float = 0.0       # 知识充足度 (0-1)
+    knowledge_sufficiency: float = 0.0
 
-    # 决策
     action: ActionDecision = ActionDecision.USE_RETRIEVAL
     action_reasons: List[str] = field(default_factory=list)
 
-    # 反思建议
     suggestions: List[str] = field(default_factory=list)
     alternative_approaches: List[str] = field(default_factory=list)
 
-    # 质量指标
     total_results: int = 0
     high_relevant_count: int = 0
     medium_relevant_count: int = 0
@@ -139,7 +125,6 @@ class ResultEvaluator:
         """use_llm_evaluation: 是否使用LLM进行深度评估 (暂未实现)"""
         self.use_llm_evaluation = use_llm_evaluation
 
-        # 相关性阈值配置
         self.thresholds = {
             'high': 0.7,      # >= 0.7 为高度相关
             'medium': 0.4,   # >= 0.4 为中等相关
@@ -152,11 +137,9 @@ class ResultEvaluator:
         """评估检索结果，返回评估报告"""
         report = EvaluationReport(query=query, question_type=question_type)
 
-        # 提取查询关键词和实体
         query_keywords = self._extract_keywords(query)
         query_entities = self._extract_entities(query)
 
-        # 评估三元组 / 文档 / Wiki
         report.triple_scores.extend(
             self._evaluate_triple(t, query, query_keywords, query_entities)
             for t in triples
@@ -170,7 +153,6 @@ class ResultEvaluator:
                 wiki_summary, query, query_keywords, query_entities
             )
 
-        # 聚合评估 + 决策
         self._aggregate_evaluation(report)
         self._make_decision(report)
 
@@ -192,12 +174,10 @@ class ResultEvaluator:
         """提取查询中的实体（简单基于规则）"""
         entities = []
 
-        # 提取带词缀的实体
         for suffixes in _ENTITY_SUFFIXES.values():
             for suffix in suffixes:
                 entities.extend(re.findall(f'.*{suffix}', query))
 
-        # 提取引号/「」内的内容
         entities.extend(re.findall(r'[""]([^""]+)[""]', query))
         entities.extend(re.findall(r'[「』]([^「」]+)[「」]', query))
 

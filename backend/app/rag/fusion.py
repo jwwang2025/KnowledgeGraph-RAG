@@ -7,7 +7,6 @@ from typing import List, Dict, Any, Optional, Tuple
 from enum import Enum
 from collections import defaultdict
 
-# 得分分布区间
 _SCORE_RANGES = (
     (0.8, 1.0, "0.8-1.0"),
     (0.6, 0.8, "0.6-0.8"),
@@ -30,9 +29,9 @@ def _jaccard(set1: set, set2: set) -> float:
 
 class ResultType(Enum):
     """结果类型枚举"""
-    TRIPLE = "triple"           # 知识图谱三元组
-    DOCUMENT = "document"       # 文档片段
-    WIKI = "wiki"               # Wikipedia 内容
+    TRIPLE = "triple"
+    DOCUMENT = "document"
+    WIKI = "wiki"
 
 
 @dataclass
@@ -121,7 +120,6 @@ class RRFusion:
         self.enable_deduplication = enable_deduplication
         self.dedup_threshold = dedup_threshold
 
-        # 各来源融合权重
         self.source_weights = {
             'kg': 1.0,
             'vector': 1.0,
@@ -144,7 +142,6 @@ class RRFusion:
         result.total_input = sum(len(v) if isinstance(v, list) else 1
                                  for v in source_results.values())
 
-        # 1. 转换为 FusionItem
         all_items: List[FusionItem] = []
         for source, items in source_results.items():
             if not items:
@@ -164,15 +161,12 @@ class RRFusion:
                     item, source, idx, scores[idx] if idx < len(scores) else 0.5
                 ))
 
-        # 2. 去重处理
         if self.enable_deduplication:
             all_items, dup_count = self._deduplicate(all_items)
             result.duplicates_removed = dup_count
 
-        # 3. RRF 融合
         fused_items = self._apply_rrf(all_items)
 
-        # 4. 综合得分 = RRF 得分，并按其排序
         for item in fused_items:
             item.combined_score = item.rrf_score
         fused_items.sort(key=lambda x: x.combined_score, reverse=True)
@@ -180,7 +174,6 @@ class RRFusion:
         result.items = fused_items
         result.total_output = len(fused_items)
 
-        # 5. 统计信息
         result.source_contributions = self._count_contributions(fused_items)
         result.score_distribution = self._calculate_score_distribution(fused_items)
         result.fusion_time = time.time() - start_time
@@ -331,7 +324,7 @@ class MultiRoundRetrieval:
 
     def __init__(self, k: float = 60.0, enable_dedup: bool = True):
         self.fusion_engine = RRFusion(k=k, enable_deduplication=enable_dedup)
-        self.reranker = None  # 延迟加载
+        self.reranker = None
         self._enable_rerank = True
 
     def set_reranker(self, reranker):
@@ -402,8 +395,6 @@ class MultiRoundRetrieval:
             "round2_enabled": self._enable_rerank and self.reranker is not None
         }
 
-
-# ==================== 便捷函数 ====================
 
 def fuse_results(query: str, source_results: Dict[str, List],
                  source_scores: Optional[Dict[str, List[float]]] = None,

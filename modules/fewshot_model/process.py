@@ -6,10 +6,9 @@ from paddlenlp import Taskflow
 relation_ie = Taskflow("information_extraction", schema=schema_v3.schema, task_path="/data_F/zhijian/fuchuang-kg/PaddleNLP-model_zoo-uie/checkpoint/model_best_41line_100ep")
 
 
-# 关系抽取并修改json文件
 def rel_json(content):
-    all_relations = [] # 定义一个空列表，用于存储每个chapter的关系信息
-    res_relation = relation_ie(content)  # 传入文本进行关系识别
+    all_relations = []
+    res_relation = relation_ie(content)
     for rel in res_relation:
         for sub_type, sub_rel in rel.items():
             for sub in sub_rel:
@@ -24,7 +23,6 @@ def rel_json(content):
     return all_relations
 
 
-# 执行函数
 def uie_execute(texts):
 
     sent_id = 0

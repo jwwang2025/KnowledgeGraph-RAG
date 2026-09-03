@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 配置 HuggingFace 镜像和 SSL 设置
 解决国内网络环境下模型下载的 SSL 证书验证问题
@@ -10,18 +9,14 @@ import subprocess
 def setup_huggingface_env():
     """设置 HuggingFace 环境变量"""
     
-    # HuggingFace 镜像站点 (国内可用的镜像)
     HF_ENDPOINT = "https://hf-mirror.com"
-    
-    # 设置环境变量
+
     os.environ["HF_ENDPOINT"] = HF_ENDPOINT
     os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"  # 禁用 hf_transfer 加速
     
     print(f"已设置 HuggingFace 镜像: {HF_ENDPOINT}")
     
-    # 尝试创建/更新用户环境变量（永久生效）
     try:
-        # 设置当前用户的环境变量（需要重启终端生效）
         import winreg
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment", 0, winreg.KEY_WRITE)
         winreg.SetValueEx(key, "HF_ENDPOINT", 0, winreg.REG_SZ, HF_ENDPOINT)
@@ -39,12 +34,10 @@ def disable_ssl_verification():
     import urllib.request
     import ssl
     
-    # 创建不验证 SSL 证书的上下文
     ssl_context = ssl.create_default_context()
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
     
-    # 设置默认的 SSL 上下文
     urllib.request.socket = None  # 这不会生效
     
     print("注意: SSL 验证已禁用")
@@ -59,7 +52,6 @@ def fix_ssl_certificates():
     ca_bundle_path = certifi.where()
     print(f"certifi 证书路径: {ca_bundle_path}")
     
-    # 设置 SSL_CERT_FILE 环境变量
     os.environ["SSL_CERT_FILE"] = ca_bundle_path
     os.environ["REQUESTS_CA_BUNDLE"] = ca_bundle_path
     
@@ -71,14 +63,12 @@ if __name__ == "__main__":
     print("HuggingFace 环境配置")
     print("=" * 50)
     
-    # 1. 尝试修复 SSL 证书
     try:
         fix_ssl_certificates()
     except ImportError:
         print("certifi 未安装，跳过证书修复")
         print("运行: pip install certifi")
     
-    # 2. 设置镜像
     setup_huggingface_env()
     
     print("\n配置完成！")

@@ -65,7 +65,6 @@ class VectorIndexer:
         """获取所有可用的数据文件"""
         files = {}
         
-        # 原始数据文件
         possible_raw_paths = [
             os.path.join(self.project_dir, "raw_data", "raw_data.txt"),
             os.path.join(self.project_dir, "..", "raw_data", "raw_data.txt"),
@@ -76,12 +75,10 @@ class VectorIndexer:
                 files['raw'] = path
                 break
                 
-        # 知识图谱文件
         graph_file = os.path.join(self.project_dir, "knowledge_graph", "knowledge_graph.json")
         if os.path.exists(graph_file):
             files['graph'] = graph_file
         else:
-            # 尝试从历史文件加载
             history_files = glob.glob(os.path.join(self.project_dir, "history", "*.json"))
             if history_files:
                 latest_history = max(history_files, key=os.path.getmtime)
@@ -92,7 +89,6 @@ class VectorIndexer:
                     if os.path.exists(latest_kg):
                         files['graph'] = latest_kg
                         
-        # 清洗后的数据文件
         clean_data_paths = [
             os.path.join(self.project_dir, "base_filtered.json"),
             "data/clean_data_res_doc2_300epoch.json",
@@ -103,8 +99,6 @@ class VectorIndexer:
                 break
                 
         return files
-        
-    # ============== 默认编码器方法 ==============
         
     def index_raw_documents(self):
         """将原始文档向量化入库"""
@@ -155,12 +149,9 @@ class VectorIndexer:
         try:
             with open(graph_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                # 如果是包含 sents 字段的标准格式
                 if 'sents' in data:
                     return self._index_sentences_from_list(data['sents'])
-                # 如果是包含 nodes 和 links 的格式
                 elif 'nodes' in data and 'links' in data:
-                    # 提取句子
                     sents = []
                     for link in data.get('links', []):
                         if 'sent' in link:
@@ -175,7 +166,6 @@ class VectorIndexer:
             print(f"[警告] 知识图谱中没有数据")
             return 0
             
-        # 从 JSONL 记录中提取句子
         sents = [record.get('sentText', '') for record in graph_records if record.get('sentText')]
         
         if not sents:
@@ -230,7 +220,6 @@ class VectorIndexer:
         try:
             with open(graph_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                # 如果是包含 nodes 和 links 字段的标准格式
                 if 'nodes' in data and 'links' in data:
                     return self._index_triples_from_nodes_links(data)
         except json.JSONDecodeError:
@@ -241,7 +230,6 @@ class VectorIndexer:
             print(f"[警告] 知识图谱文件不存在")
             return 0
             
-        # 从 JSONL 记录中提取三元组
         triples = self._extract_triples_from_records(graph_records)
         
         if not triples:
@@ -269,7 +257,6 @@ class VectorIndexer:
         """
         triples = []
         for record in records:
-            # 跳过没有关系提及的记录
             if 'relationMentions' not in record:
                 continue
                 
@@ -348,8 +335,6 @@ class VectorIndexer:
             
         return total
         
-    # ============== Qwen3-Embedding 层级索引方法 ==============
-    
     def index_with_qwen3(self, data_source=None, index_level="all"):
         """
         使用 Qwen3-Embedding-8B 构建层级向量索引
@@ -368,7 +353,6 @@ class VectorIndexer:
         indexer = self._init_hierarchical_indexer()
         files = self._get_data_files()
         
-        # 确定数据源
         if data_source is None:
             # 优先使用清洗后的数据
             if 'clean' in files:
@@ -383,7 +367,6 @@ class VectorIndexer:
                 
         print(f"[信息] 数据源: {data_source}")
         
-        # 加载数据
         documents = []
         metadata_list = []
         
@@ -397,7 +380,6 @@ class VectorIndexer:
                             metadata_list = [item for item in data if isinstance(item, dict)]
                         elif isinstance(data, dict):
                             if 'nodes' in data:
-                                # 知识图谱格式 - 提取节点名称作为文档
                                 documents = [node.get('name', '') for node in data.get('nodes', [])]
                             elif 'sents' in data:
                                 documents = data['sents']
@@ -418,14 +400,12 @@ class VectorIndexer:
             
         print(f"[信息] 加载了 {len(documents)} 条文档")
         
-        # 批量索引
         result = indexer.index_documents_batch(
             documents,
             metadata_list if metadata_list else None,
             index_level=index_level
         )
         
-        # 保存元数据
         indexer.save_index_metadata()
         
         print("=" * 50)
@@ -501,7 +481,6 @@ def main():
     )
     
     if args.encoder == 'default':
-        # 使用默认的 Sentence Transformer 编码器
         if args.source == 'raw':
             indexer.index_raw_documents()
         elif args.source == 'graph':
@@ -511,9 +490,7 @@ def main():
         else:
             indexer.index_all()
     else:
-        # 使用 Qwen3-Embedding-8B 编码器
         if args.search:
-            # 执行搜索
             if args.encoder == 'hybrid':
                 results = indexer.hybrid_search_qwen3(args.search, top_k=args.top_k)
             else:
@@ -531,13 +508,11 @@ def main():
                         for doc, dist in zip(level_results['documents'][:3], level_results['distances'][:3]):
                             print(f"  - {doc[:100]}... (距离: {dist:.4f})")
         else:
-            # 构建索引
             result = indexer.index_with_qwen3(
                 data_source=args.data_source,
                 index_level=args.level
             )
-            
-            # 显示索引信息
+
             print("\n索引信息:")
             info = indexer.get_qwen3_index_info()
             for level, level_info in info.items():

@@ -28,7 +28,6 @@ def auto_filter(items, model_name_or_path):
             if len(sub_tokens) > 15 or len(obj_tokens) > 15:
                 continue
 
-            # 1. 判断 subject 是否在句子中，长短数组匹配问题
             sub_start = -1
             sub_end = -1
             for i in range(len(sent_tokens) - len(sub_tokens) + 1):
@@ -37,7 +36,6 @@ def auto_filter(items, model_name_or_path):
                     sub_end = i + len(sub_tokens) - 1
                     break
 
-            # 2. 判断 object 是否在句子中，长短数组匹配问题
             obj_start = -1
             obj_end = -1
             for i in range(len(sent_tokens) - len(obj_tokens) + 1):
@@ -46,7 +44,6 @@ def auto_filter(items, model_name_or_path):
                     obj_end = i + len(obj_tokens) - 1
                     break
 
-            # 3. 判断 subject 和 object 是否在句子中，长短数组匹配问题
             if sub_start == -1:
                 print("subject not in sentText")
                 print("subject", sub_tokens)
@@ -69,6 +66,6 @@ def auto_filter(items, model_name_or_path):
                 "em2End": obj_end
             })
 
-        example["relationMentions"] = relations # 覆盖原来的 relations
+        example["relationMentions"] = relations
 
     return items

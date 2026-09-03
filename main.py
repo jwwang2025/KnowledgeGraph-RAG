@@ -1,13 +1,10 @@
 import argparse
 import os
 
-# 加载配置系统
 from config.settings import load_dotenv, settings
 
-# 加载 .env 文件中的配置
 load_dotenv()
 
-# 设置 CUDA 环境变量
 settings.setup_cuda()
 
 from modules.knowledge_graph_builder import KnowledgeGraphBuilder
@@ -25,7 +22,6 @@ def arg_parser():
 if __name__ == "__main__":
     args = arg_parser()
     
-    # 单独构建向量索引模式
     if args.build_vector_index:
         from modules.vector_indexer import VectorIndexer
         indexer = VectorIndexer(project_name=args.project)
@@ -40,10 +36,8 @@ if __name__ == "__main__":
         kg_builder.gpu = args.gpu # 这个是要换掉的
 
     else:
-        # startup
         kg_builder.get_base_kg_from_txt()
 
-    # iteration
     max_iteration = settings.MAX_ITERATION
 
     while kg_builder.version < max_iteration:

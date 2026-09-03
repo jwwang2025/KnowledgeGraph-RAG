@@ -1,11 +1,9 @@
 import re
 from zhconv import convert
 
-# 打开并删除文本中的特殊字符
 def clean_to_sentence(file_path):
     with open(file_path, 'r', encoding='utf-8') as f_in:
         dirty_text = f_in.read()
-    # 去除非中英文和数字字符
     dirty_text = dirty_text.replace('彳艮', '很')
     dirty_text = dirty_text.replace('\n', '；')
     dirty_text = dirty_text.replace('\t', '；')
@@ -20,7 +18,6 @@ def clean_to_sentence(file_path):
     clean_sentences = [sent + "。" for sent in clean_text.split('。')]
     return clean_sentences
 
-# 将文本按照句子分割
 def add_sentences(sentences, max_line_length=480):
     current_line = ''
     output = []
@@ -33,7 +30,6 @@ def add_sentences(sentences, max_line_length=480):
         output.append(current_line.strip())
     return output
 
-# 将文本按照句子分割
 def process_text(input_file, max_line_length):
     sentences = clean_to_sentence(input_file)
     formatted_output = add_sentences(sentences, max_line_length)

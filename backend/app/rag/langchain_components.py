@@ -22,10 +22,6 @@ from langchain_community.utilities import WikipediaAPIWrapper
 from langchain_community.tools import WikipediaQueryRun
 
 
-# =============================================================================
-# Part 1: Embeddings 封装层
-# =============================================================================
-
 class SentenceTransformerEmbeddings(Embeddings):
     """LangChain 兼容的 SentenceTransformer Embeddings 封装。"""
 
@@ -99,7 +95,6 @@ class Qwen3Embeddings(Embeddings):
         self.max_length = max_length
         self._encoder = None
 
-        # 自动选择设备
         if device is None:
             import torch
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -136,10 +131,6 @@ class Qwen3Embeddings(Embeddings):
                 for k, v in results.items()}
 
 
-# =============================================================================
-# Part 2: 自定义 VectorStore
-# =============================================================================
-
 class KnowledgeGraphVectorStore(VectorStore):
     """知识图谱增强的 VectorStore：同时支持向量检索与图谱数据。"""
 
@@ -156,7 +147,6 @@ class KnowledgeGraphVectorStore(VectorStore):
         self._client = client
         self._collection = None
 
-        # 初始化 ChromaDB
         if client is None:
             import chromadb
             from chromadb.config import Settings
@@ -165,7 +155,6 @@ class KnowledgeGraphVectorStore(VectorStore):
                 settings=Settings(anonymized_telemetry=False)
             )
 
-        # 获取或创建集合
         self._collection = self._client.get_or_create_collection(
             name=collection_name,
             metadata={"description": "Knowledge Graph RAG vector store"}
@@ -207,7 +196,6 @@ class KnowledgeGraphVectorStore(VectorStore):
         texts = list(texts)
         ids = ids or [f"doc_{i}" for i in range(len(texts))]
 
-        # 如果没有提供嵌入，使用 embedding_function
         if embeddings is None and self.embedding_function is not None:
             embeddings = self.embedding_function.embed_documents(texts)
 
@@ -339,7 +327,6 @@ class KnowledgeGraphRetriever(BaseRetriever):
         else:
             documents = self.vectorstore.similarity_search(query, k=self.k)
 
-        # 可选：按分数过滤
         if self.score_threshold:
             if self.search_type == "similarity":
                 docs_with_scores = self.vectorstore.similarity_search_with_score(query, k=self.k)
@@ -347,10 +334,6 @@ class KnowledgeGraphRetriever(BaseRetriever):
 
         return documents
 
-
-# =============================================================================
-# Part 3: 自定义 Retriever
-# =============================================================================
 
 def _mark_source(documents: List[Document], source: str, weight: float) -> List[Document]:
     """为文档标注来源与权重"""
@@ -385,7 +368,6 @@ class MultiSourceRetriever(BaseRetriever):
     ) -> List[Document]:
         all_documents = []
 
-        # 1. 向量数据库检索
         if self.vector_retriever:
             try:
                 vector_docs = self.vector_retriever.get_relevant_documents(query, **kwargs)
@@ -395,7 +377,6 @@ class MultiSourceRetriever(BaseRetriever):
             except Exception as e:
                 print(f"[MultiSourceRetriever] 向量检索失败: {e}")
 
-        # 2. 知识图谱检索
         if self.kg_retriever:
             try:
                 kg_docs = self.kg_retriever(query, top_k=self.k)
@@ -405,7 +386,6 @@ class MultiSourceRetriever(BaseRetriever):
             except Exception as e:
                 print(f"[MultiSourceRetriever] 知识图谱检索失败: {e}")
 
-        # 3. Wikipedia 检索
         if self.wiki_wrapper:
             try:
                 wiki_result = self.wiki_wrapper.run(query)
@@ -417,14 +397,9 @@ class MultiSourceRetriever(BaseRetriever):
             except Exception as e:
                 print(f"[MultiSourceRetriever] Wikipedia 检索失败: {e}")
 
-        # 按权重排序并限制数量
         all_documents.sort(key=lambda x: x.metadata.get("weight", 0), reverse=True)
         return all_documents[:self.k]
 
-
-# =============================================================================
-# Part 4: 自定义 RAG Chain 组件
-# =============================================================================
 
 @dataclass
 class RetrievalResult:
@@ -454,7 +429,6 @@ class RAGFusionRetriever(BaseRetriever):
         run_manager: CallbackManagerForRetrieverRun,
         **kwargs
     ) -> List[Document]:
-        # 获取所有检索器结果
         all_results: Dict[str, List[Tuple[int, Document]]] = {}
 
         for i, retriever in enumerate(self.retrievers):
@@ -475,7 +449,6 @@ class RAGFusionRetriever(BaseRetriever):
                 fused_scores[doc_key] = fused_scores.get(doc_key, 0.0) + 1.0 / (self.k + rank + 1)
                 doc_map[doc_key] = doc
 
-        # 按分数排序，返回 top 10
         sorted_keys = sorted(fused_scores.keys(), key=lambda x: fused_scores[x], reverse=True)
 
         fused_documents = []
@@ -486,10 +459,6 @@ class RAGFusionRetriever(BaseRetriever):
 
         return fused_documents
 
-
-# =============================================================================
-# Part 5: 提示模板
-# =============================================================================
 
 class RAGPromptTemplates:
     """RAG 场景使用的提示模板"""
@@ -579,10 +548,6 @@ class RAGPromptTemplates:
         return PromptTemplate.from_template(cls.get_template(template_type))
 
 
-# =============================================================================
-# Part 6: RAG Chain 构建器
-# =============================================================================
-
 class RAGChainBuilder:
     """RAG Chain 构建器：基于 LangChain Runnable 接口构建 RAG 流程。"""
 
@@ -650,7 +615,6 @@ class RAGChainBuilder:
         if question_router:
             stages.append(question_router)
 
-        # 检索阶段
         stages.append(RunnableLambda(
             lambda x: {"context": self.retriever.get_relevant_documents(x["question"])}
         ))
@@ -658,7 +622,6 @@ class RAGChainBuilder:
         if result_evaluator:
             stages.append(result_evaluator)
 
-        # 生成阶段
         stages.append(
             RunnablePassthrough.assign(context=lambda x: _format_docs(x["context"]))
             | self._prompt
@@ -667,10 +630,6 @@ class RAGChainBuilder:
 
         return RunnableSequence(stages)
 
-
-# =============================================================================
-# Part 7: 工具函数
-# =============================================================================
 
 def _create_vectorstore(
     embeddings: Embeddings,
@@ -744,10 +703,6 @@ def format_retrieval_results(
     return "\n\n".join(doc.page_content for doc in documents)
 
 
-# =============================================================================
-# Part 8: LangChain 集成适配器
-# =============================================================================
-
 class LangChainAdapter:
     """LangChain 集成适配器：将 KnowledgeGraph-RAG 组件接入 LangChain 框架。"""
 
@@ -796,26 +751,16 @@ class LangChainAdapter:
         return self._chain.stream(input_data)
 
 
-# =============================================================================
-# 导出
-# =============================================================================
-
 __all__ = [
-    # Embeddings
     'SentenceTransformerEmbeddings',
     'Qwen3Embeddings',
-    # VectorStore
     'KnowledgeGraphVectorStore',
     'KnowledgeGraphRetriever',
-    # Retriever
     'MultiSourceRetriever',
     'RAGFusionRetriever',
-    # Prompt Templates
     'RAGPromptTemplates',
-    # Chain Builder
     'RAGChainBuilder',
     'LangChainAdapter',
-    # Utilities
     'create_langchain_vectorstore',
     'create_qwen3_vectorstore',
     'create_wikipedia_retriever',

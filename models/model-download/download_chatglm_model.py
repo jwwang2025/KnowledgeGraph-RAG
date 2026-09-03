@@ -8,22 +8,19 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 
-# 模型保存路径（相对于项目根目录）
 # 获取项目根目录（脚本位于 models/1_model-download/，向上两级到项目根目录）
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 MODEL_DIR = PROJECT_ROOT / "models" / "chatglm-6b"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
-# Hugging Face 模型仓库URL
 # 使用镜像站（hf-mirror.com）以提高下载速度
 # https://github.com/zai-org/ChatGLM-6B
 # https://hf-mirror.com/zai-org/chatglm-6b/tree/main
 BASE_URL = "https://hf-mirror.com/zai-org/chatglm-6b/resolve/main"
 
-# 必需的配置/分词器文件（根据仓库实际文件列表）
 REQUIRED_FILES = [
-    "config.json",  # 模型配置
-    "tokenizer_config.json",  # 分词器配置
+    "config.json",
+    "tokenizer_config.json",
     "ice_text.model",  # BPE 词表（2.71 MB）
     "pytorch_model.bin.index.json",  # 权重索引（指向8个分片）
 ]
@@ -57,7 +54,6 @@ OPTIONAL_FILES = [
     "test_modeling_chatglm.py",  # 测试文件（用于测试模型代码，不影响模型运行）
 ]
 
-# 所有需要下载的文件
 FILES_TO_DOWNLOAD = REQUIRED_FILES + MODEL_FILES + CUSTOM_CODE_FILES + OPTIONAL_FILES
 
 def download_file(url, save_path):
@@ -114,7 +110,6 @@ def main():
         file_path = MODEL_DIR / filename
         file_url = f"{BASE_URL}/{filename}"
         
-        # 如果文件已存在，询问是否跳过
         if file_path.exists():
             file_size = file_path.stat().st_size / (1024 * 1024)  # MB
             print(f"\n文件已存在: {file_path} ({file_size:.1f} MB)")
@@ -144,7 +139,6 @@ def main():
         print("所有文件下载成功！")
     print("=" * 60)
     
-    # 验证关键文件是否存在
     print("\n验证关键文件...")
     critical_files = [
         "config.json",  # 模型配置（必需）
@@ -162,7 +156,6 @@ def main():
         if not file_path.exists():
             missing_files.append(filename)
     
-    # 检查所有8个权重分片文件是否存在
     missing_weight_files = []
     for i in range(1, 9):
         weight_file = MODEL_DIR / f"pytorch_model-{i:05d}-of-00008.bin"

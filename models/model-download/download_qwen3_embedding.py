@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Qwen3-Embedding-8B 模型下载脚本
 支持离线下载和镜像加速
@@ -6,7 +5,6 @@ Qwen3-Embedding-8B 模型下载脚本
 import os
 import sys
 
-# 设置 HuggingFace 镜像（国内加速）
 HF_ENDPOINT = os.environ.get("HF_ENDPOINT", "https://hf-mirror.com")
 os.environ["HF_ENDPOINT"] = HF_ENDPOINT
 
@@ -17,7 +15,6 @@ def download_qwen3_embedding_model():
     
     model_name = "Qwen/Qwen3-Embedding-8B"
     
-    # 获取保存路径
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(script_dir)))
     save_path = os.path.join(project_root, "models", "Qwen3-Embedding-8B")
@@ -32,7 +29,6 @@ def download_qwen3_embedding_model():
     print(f"使用镜像: {HF_ENDPOINT}")
     print("=" * 60)
     
-    # 检查是否已存在
     if os.path.exists(os.path.join(save_path, "config.json")):
         print(f"\n模型已存在于: {save_path}")
         response = input("是否重新下载？(y/N): ").strip().lower()
@@ -41,7 +37,6 @@ def download_qwen3_embedding_model():
             return save_path
     
     try:
-        # 1. 下载分词器
         print("\n[1/3] 下载分词器...")
         tokenizer = AutoTokenizer.from_pretrained(
             model_name,
@@ -50,13 +45,11 @@ def download_qwen3_embedding_model():
         tokenizer.save_pretrained(save_path)
         print("分词器下载完成")
         
-        # 2. 下载模型配置
         print("\n[2/3] 下载模型配置...")
         config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
         config.save_pretrained(save_path)
         print("配置下载完成")
         
-        # 3. 下载模型权重
         print("\n[3/3] 下载模型权重...")
         print("提示: 模型较大，请耐心等待...")
         
@@ -74,7 +67,6 @@ def download_qwen3_embedding_model():
         print(f"保存路径: {save_path}")
         print("=" * 60)
         
-        # 验证文件
         print("\n验证下载文件:")
         required_files = ["config.json", "tokenizer.json", "tokenizer_config.json", "model.safetensors"]
         for f in required_files:

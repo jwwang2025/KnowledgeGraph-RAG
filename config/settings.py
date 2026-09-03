@@ -53,7 +53,6 @@ class Settings:
     Use .env file or export environment variables to configure.
     """
 
-    # ============== Path Configuration ==============
     PROJECT_ROOT: Path = field(default_factory=_get_project_root)
 
     @property
@@ -68,11 +67,9 @@ class Settings:
         custom = _get_env("RAW_DATA_PATH")
         return Path(custom) if custom else self.DATA_DIR / "raw_data" / "raw_data.txt"
 
-    # ============== Model Configuration ==============
     @property
     def CHATGLM_MODEL_PATH(self) -> str:
         """ChatGLM model weights path."""
-        # 优先使用本地模型路径
         default_path = str(self.PROJECT_ROOT / "models" / "chatglm-6b")
         if (self.PROJECT_ROOT / "models" / "chatglm-6b").exists():
             return _get_env("CHATGLM_MODEL_PATH", default_path)
@@ -81,7 +78,6 @@ class Settings:
     @property
     def BERT_MODEL_NAME(self) -> str:
         """BERT model name or path for tokenization and SPN4RE."""
-        # 优先使用本地模型路径
         default_path = str(self.PROJECT_ROOT / "models" / "bert-base-chinese")
         if (self.PROJECT_ROOT / "models" / "bert-base-chinese").exists():
             return _get_env("BERT_MODEL_NAME", default_path)
@@ -90,7 +86,6 @@ class Settings:
     @property
     def UIE_MODEL_NAME(self) -> str:
         """PaddleNLP UIE model name."""
-        # 优先使用本地模型路径
         default_path = str(self.PROJECT_ROOT / "models" / "uie-base")
         if (self.PROJECT_ROOT / "models" / "uie-base").exists():
             return _get_env("UIE_MODEL_NAME", default_path)
@@ -104,7 +99,6 @@ class Settings:
             return _get_env("QWEN3_EMBEDDING_MODEL_PATH", default_path)
         return _get_env("QWEN3_EMBEDDING_MODEL_PATH", "Qwen/Qwen3-Embedding-8B")
 
-    # ============== Training Configuration ==============
     @property
     def TRAIN_RATIO(self) -> float:
         """Training data ratio."""
@@ -145,7 +139,6 @@ class Settings:
         """Number of generated triples per sentence."""
         return _get_env_int("NUM_GENERATED_TRIPLES", 15)
 
-    # ============== GPU Configuration ==============
     @property
     def CUDA_VISIBLE_DEVICES(self) -> str:
         """CUDA visible devices."""
@@ -156,7 +149,6 @@ class Settings:
         """Default GPU ID for training."""
         return _get_env("DEFAULT_GPU", "0")
 
-    # ============== Server Configuration ==============
     @property
     def SERVER_HOST(self) -> str:
         """Flask server host."""
@@ -187,7 +179,6 @@ class Settings:
         """Debug mode flag."""
         return _get_env_bool("DEBUG", False)
 
-    # ============== Schema Configuration ==============
     @property
     def SCHEMA_VERSION(self) -> str:
         """Schema version to use (v1, v2, v3, v4)."""
@@ -206,7 +197,6 @@ class Settings:
             from data.schema.schema_v4 import schema
         return schema
 
-    # ============== Vector Index Configuration ==============
     @property
     def VECTOR_INDEX_CHUNK_SIZE(self) -> int:
         """Chunk size for vector indexing."""
@@ -238,7 +228,6 @@ class Settings:
         """Default top-k for vector search."""
         return _get_env_int("VECTOR_SEARCH_TOP_K", 5)
 
-    # ============== Extend Ratio Threshold ==============
     @property
     def EXTEND_RATIO_THRESHOLD(self) -> float:
         """Minimum extend ratio to continue iteration."""
@@ -251,7 +240,6 @@ class Settings:
         os.environ["MKL_THREADING_LAYER"] = "GNU"
 
 
-# Global settings instance
 settings = Settings()
 
 

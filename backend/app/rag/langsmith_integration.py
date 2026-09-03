@@ -4,7 +4,6 @@ import os
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, field
 
-# LangSmith
 from langsmith import Client, traceable
 from langchain_core.callbacks import CallbackManager
 
@@ -105,7 +104,6 @@ class LangSmithManager:
             "tags": tags or []
         }
 
-        # 使用 Client 记录
         if self.client:
             self.client.create_run(**run_data)
 
@@ -114,7 +112,6 @@ class LangSmithManager:
         return self._enabled
 
 
-# 全局 LangSmith 管理器实例
 _langsmith_manager: Optional[LangSmithManager] = None
 
 
@@ -137,7 +134,6 @@ def traced(name: str, tags: Optional[List[str]] = None):
     return manager.create_tracer(name, tags)
 
 
-# 导出
 __all__ = [
     'LangSmithConfig',
     'LangSmithManager',

@@ -36,7 +36,6 @@ def search_node_item(user_input, lite_graph=None):
     def match_node(node_name, keyword):
         return node_name in keyword or keyword in node_name
 
-    # search node
     search_nodes = [user_input]
     for d in range(DEEP):
         for serch_node in search_nodes:

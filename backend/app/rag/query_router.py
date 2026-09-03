@@ -8,49 +8,40 @@ from typing import List, Optional
 
 class QuestionType(Enum):
     """问题类型枚举"""
-    # 事实型问题 - 需要检索外部知识
-    FACTUAL = "factual"           # 实体相关的事实问题 (谁、什么、在哪)
-    DEFINITION = "definition"     # 定义类问题 (什么是、含义)
-    COMPARISON = "comparison"     # 比较类问题 (A和B的区别)
-    PROCEDURAL = "procedural"     # 过程类问题 (如何做、步骤)
+    FACTUAL = "factual"
+    DEFINITION = "definition"
+    COMPARISON = "comparison"
+    PROCEDURAL = "procedural"
 
-    # 知识型问题 - 可能需要检索
-    RELATION = "relation"         # 关系查询 (X和Y的关系)
-    ATTRIBUTE = "attribute"       # 属性查询 (X的属性)
+    RELATION = "relation"
+    ATTRIBUTE = "attribute"
 
-    # 解释型问题 - 需要深度检索
-    EXPLANATION = "explanation"   # 解释为什么 (原因、原理)
-    ANALYSIS = "analysis"         # 分析类问题
+    EXPLANATION = "explanation"
+    ANALYSIS = "analysis"
 
-    # 非检索型问题 - 可以直接回答
-    CHITCHAT = "chitchat"         # 闲聊
-    OPINION = "opinion"           # 观点/主观问题
-    MATH = "math"                 # 数学计算
+    CHITCHAT = "chitchat"
+    OPINION = "opinion"
+    MATH = "math"
 
-    # 复合型问题 - 需要多源检索
-    COMPLEX = "complex"          # 复杂问题
+    COMPLEX = "complex"
 
 
-# 闲聊/问候类（不需要检索）
 _CHITCHAT_PATTERNS = tuple(re.compile(p) for p in (
     r'^你好', r'^您好', r'^嗨', r'^哈喽', r'^hey', r'^hi',
     r'你是谁', r'你叫什么', r'你好吗', r'今天怎么样',
     r'^再见', r'^拜拜', r'^晚安',
 ))
 
-# 纯主观/观点类（谨慎检索）
 _OPINION_PATTERNS = tuple(re.compile(p) for p in (
     r'你觉得.*怎么样', r'你认为.*好吗', r'喜欢.*吗',
     r'觉得.*如何', r'推荐.*吗',
 ))
 
-# 数学计算类（不需要外部检索）
 _MATH_PATTERNS = tuple(re.compile(p) for p in (
-    r'^\d+\s*[+\-*/]\s*\d+',  # 简单计算
+    r'^\d+\s*[+\-*/]\s*\d+',
     r'计算', r'等于多少', r'结果是',
 ))
 
-# 各问题类型的分类关键词 (类型, 置信度, 关键词列表)
 _CLASSIFY_RULES = (
     (QuestionType.DEFINITION, 0.85, ('什么是', '什么叫', '定义', '含义', '概念', '解释', '是什么')),
     (QuestionType.COMPARISON, 0.80, ('区别', '不同', '比较', '对比', '差异', '哪个好', '还是')),
@@ -59,16 +50,13 @@ _CLASSIFY_RULES = (
     (QuestionType.FACTUAL, 0.75, ('谁', '什么', '哪', '哪里', '几', '多少', '什么时候')),
 )
 
-# 属性查询关键词
 _ATTRIBUTE_KEYWORDS = ('的属性', '的特点', '的特征', '的优缺点')
 
-# 关系查询正则
 _RELATION_PATTERNS = tuple(re.compile(p) for p in (
     r'.*和.*的关系', r'.*与.*的.*', r'.*属于.*',
     r'.*的.*是什么', r'.*和.*的区别',
 ))
 
-# 不同问题类型对应的知识源配置
 _SOURCE_CONFIG = {
     QuestionType.FACTUAL: {
         'sources': ['kg', 'vector', 'wiki', 'image'],
@@ -108,10 +96,8 @@ _SOURCE_CONFIG = {
     },
 }
 
-# 实体指示词：命中时优先使用知识图谱
 _ENTITY_INDICATORS = ('是谁', '是什么', '在哪里', '的创始人', '的公司', '的国家')
 
-# 各问题类型的基础推理深度
 _REASONING_DEPTHS = {
     QuestionType.FACTUAL: 1,
     QuestionType.DEFINITION: 1,
@@ -124,13 +110,10 @@ _REASONING_DEPTHS = {
     QuestionType.COMPLEX: 2,
 }
 
-# 多实体分隔词
 _MULTI_ENTITY_WORDS = ('和', '与', '还是', '或者', '以及')
 
-# 需要 CoT 深度模式 / 迭代检索的问题类型
 _DEEP_COT_TYPES = frozenset({QuestionType.COMPLEX, QuestionType.ANALYSIS, QuestionType.COMPARISON})
 
-# 问题类型友好描述
 _TYPE_DESCRIPTIONS = {
     QuestionType.FACTUAL: "事实型问题",
     QuestionType.DEFINITION: "定义型问题",
@@ -175,11 +158,9 @@ class QueryRouter:
 
     def route(self, query: str, history: List[tuple] = None) -> RetrievalPlan:
         """分析问题并生成检索计划"""
-        # 预处理
         query_clean = query.strip()
         query_lower = query_clean.lower()
 
-        # 1. 首先判断是否需要检索
         need_retrieval, skip_reason = self._check_if_need_retrieval(query_clean, query_lower)
 
         if not need_retrieval:
@@ -224,24 +205,19 @@ class QueryRouter:
 
     def _check_if_need_retrieval(self, query: str, query_lower: str) -> tuple:
         """判断是否需要检索，返回 (need_retrieval, skip_reason)"""
-        # 闲聊/问候类 - 不需要检索
         for pattern in _CHITCHAT_PATTERNS:
             if pattern.search(query_lower):
                 return False, "chitchat"
 
-        # 纯主观/观点类 - 谨慎检索
         for pattern in _OPINION_PATTERNS:
             if pattern.search(query_lower):
-                # 这类问题可以检索但不是必须
                 if '推荐' in query or '觉得' in query:
-                    return True, "opinion_search"  # 还是需要检索
+                    return True, "opinion_search"
 
-        # 数学计算类 - 不需要外部检索
         for pattern in _MATH_PATTERNS:
             if pattern.search(query_lower):
                 return False, "math"
 
-        # 大多数问题都需要检索
         return True, "normal"
 
     def _classify_question(self, query: str, query_lower: str) -> tuple:
@@ -256,12 +232,10 @@ class QueryRouter:
             if pattern.search(query_lower):
                 return QuestionType.RELATION, 0.80
 
-        # 属性查询
         for kw in _ATTRIBUTE_KEYWORDS:
             if kw in query:
                 return QuestionType.ATTRIBUTE, 0.75
 
-        # 默认归类为事实型（最常见）
         return QuestionType.FACTUAL, 0.60
 
     def _decide_knowledge_sources(self, question_type: QuestionType,
@@ -273,7 +247,6 @@ class QueryRouter:
         priority = list(config['priority'])
         for ind in _ENTITY_INDICATORS:
             if ind in query:
-                # 确保 kg 在最前面
                 if 'kg' in config['sources']:
                     priority.remove('kg')
                     priority.insert(0, 'kg')
@@ -283,7 +256,6 @@ class QueryRouter:
 
     def _decide_reasoning_depth(self, question_type: QuestionType, query: str) -> int:
         """决定推理深度 (0=无需推理, 1=简单推理, 2=深度推理)"""
-        # 如果包含多实体，可能需要更深的推理
         entity_count = sum(1 for w in _MULTI_ENTITY_WORDS if w in query)
 
         base_depth = _REASONING_DEPTHS.get(question_type, 1)
@@ -295,28 +267,23 @@ class QueryRouter:
     def _decide_cot_mode(self, question_type: QuestionType, reasoning_depth: int,
                         query: str) -> tuple:
         """决定 CoT 思维链模式，返回 (use_cot, cot_mode)"""
-        # 无需推理的问题不启用 CoT
         if reasoning_depth == 0:
             return False, "direct"
 
-        # 复杂问题启用深度 CoT
         if question_type in _DEEP_COT_TYPES:
             return True, "self_consistency"
 
-        # 解释类问题启用 Few-shot CoT (需要示例引导)
+        # 解释类问题启用 Few-shot CoT（需要示例引导）
         if question_type == QuestionType.EXPLANATION:
             return True, "few_shot"
 
-        # 其余情况启用 Zero-shot CoT
         return True, "zero_shot"
 
     def _check_iterative_need(self, question_type: QuestionType, query: str) -> bool:
         """检查是否需要迭代检索 (多条检索链)"""
-        # 复杂问题或分析类问题可能需要迭代
         if question_type in _DEEP_COT_TYPES:
             return True
 
-        # 多实体问题可能需要
         entity_separators = ('和', '与', '还是', '或者')
         return sum(1 for s in entity_separators if s in query) >= 2
 

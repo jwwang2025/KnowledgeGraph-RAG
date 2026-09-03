@@ -71,7 +71,6 @@ def convert_kg(kg_path: Path, out_path: Path) -> None:
             if not h or not t or not r:
                 continue
 
-            # 建节点
             for name in (h, t):
                 if name not in node_index:
                     idx = len(nodes)

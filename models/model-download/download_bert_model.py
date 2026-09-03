@@ -7,23 +7,19 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 
-# 模型保存路径（相对于项目根目录）
 # 获取项目根目录（脚本位于 models/model-download/，向上两级到项目根目录）
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 MODEL_DIR = PROJECT_ROOT / "models" / "bert-base-chinese"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
-# 镜像站基础URL
 BASE_URL = "https://hf-mirror.com/google-bert/bert-base-chinese/resolve/main"
 
-# 需要下载的文件列表（tokenizer必需的文件）
 REQUIRED_FILES = [
     "tokenizer_config.json",
     "tokenizer.json", 
     "vocab.txt",
 ]
 
-# 可选文件（如果需要完整模型）
 OPTIONAL_FILES = [
     "config.json",
     "pytorch_model.bin",  # 如果需要完整模型，取消注释
@@ -63,7 +59,6 @@ def main():
         file_path = MODEL_DIR / filename
         file_url = f"{BASE_URL}/{filename}"
         
-        # 如果文件已存在，询问是否跳过
         if file_path.exists():
             print(f"\n文件已存在: {file_path}")
             response = input("是否重新下载? (y/n, 默认n): ").strip().lower()

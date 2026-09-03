@@ -43,7 +43,6 @@ class VectorSearcher:
         self._vectorstore = None
         self._langchain_store = None
 
-        # ChromaDB 客户端与 Collection（复用，不随查询重建）
         self._init_chroma_client()
 
     def _init_chroma_client(self):

@@ -5,7 +5,6 @@ UIE 模型使用示例
 import os
 from pathlib import Path
 
-# 获取模型路径
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 MODEL_DIR = PROJECT_ROOT / "models" / "uie-base"
 
@@ -23,22 +22,19 @@ def example_1_use_transformers():
         
         model_path = str(MODEL_DIR.absolute())
         
-        # 检查模型文件是否存在
         if not (MODEL_DIR / "pytorch_model.bin").exists():
             print(f"错误: 模型文件不存在，请先运行 download_uie_model.py 下载模型")
             return
         
         print(f"正在从 {model_path} 加载模型...")
         
-        # 加载 tokenizer
         tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
         print("✓ Tokenizer 加载成功")
-        
+
         # 加载模型（需要 trust_remote_code=True 因为使用了自定义的 modeling_uie.py）
         model = AutoModel.from_pretrained(model_path, trust_remote_code=True)
         print("✓ 模型加载成功")
         
-        # 使用示例
         text = "张三在北京大学工作，他的研究方向是自然语言处理。"
         inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True)
         
@@ -72,18 +68,15 @@ def example_2_use_paddlenlp():
     try:
         from paddlenlp import Taskflow
         
-        # 定义 schema（关系抽取模式）
         schema = {
             "人物": ["工作单位", "研究方向"],
             "工作单位": ["地点"],
         }
         
         print("正在初始化 UIE Taskflow...")
-        # 使用默认的 uie-base 模型（PaddleNLP 会自动下载）
         ie = Taskflow("information_extraction", schema=schema, model="uie-base")
         print("✓ Taskflow 初始化成功")
         
-        # 使用示例
         text = "张三在北京大学工作，他的研究方向是自然语言处理。"
         result = ie(text)
         
@@ -135,10 +128,8 @@ def example_3_check_model_files():
 
 
 if __name__ == "__main__":
-    # 检查模型文件
     example_3_check_model_files()
-    
-    # 如果文件完整，尝试加载
+
     if (MODEL_DIR / "pytorch_model.bin").exists():
         print("\n" + "=" * 60)
         print("选择使用方式:")

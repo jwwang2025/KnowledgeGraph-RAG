@@ -16,7 +16,6 @@
           class="message-box"
           :class="message.type"
         >
-          <!-- 引用溯源显示 -->
           <div v-if="message.citations && message.citations.length > 0" class="citations-bar">
             <span class="citations-label">参考来源：</span>
             <span v-for="(cite, idx) in message.citations" :key="idx" class="citation-item">
@@ -31,7 +30,6 @@
             </p>
             <p style="white-space: pre-line" class="message-text">{{ message.text }}</p>
           </div>
-          <!-- 元数据面板 -->
           <div v-if="message.metadata" class="message-metadata">
             <a-collapse>
               <a-collapse-panel key="1" header="检索信息" :show-arrow="false" ghost>
@@ -80,7 +78,6 @@
         <img v-for="(img, index) in info.image" :key="index" :src="img" class="info-image" alt="">
       </div>
 
-      <!-- RAG 检索统计 -->
       <div v-if="info.ragStats" class="rag-stats">
         <h4>检索统计</h4>
         <p><span class="stat-label">问题类型：</span>{{ info.ragStats.question_type }}</p>
@@ -233,12 +230,10 @@ const sendMessage = () => {
             try {
               const data = JSON.parse(line)
 
-              // 更新状态指示器
               state.ragEnabled = data.metadata?.rag?.use_retrieval || false
               state.cotEnabled = data.metadata?.cot?.mode !== 'direct' && data.metadata?.cot?.mode !== undefined
               state.citationEnabled = !!(data.citations && data.citations.length > 0)
 
-              // 更新 RAG 统计信息
               if (data.metadata?.rag) {
                 ragStats = data.metadata.rag
                 info.ragStats = {
@@ -252,17 +247,14 @@ const sendMessage = () => {
                 }
               }
 
-              // 更新引用信息
               if (data.citations) {
                 citations = data.citations
               }
 
-              // 更新 CoT 推理步骤
               if (data.metadata?.cot?.steps) {
                 cotSteps = Array(data.metadata.cot.steps).fill('')
               }
 
-              // 更新图片和图谱
               info.image = data.image
               info.graph = data.graph
               info.title = data.wiki?.title
@@ -272,7 +264,6 @@ const sendMessage = () => {
                 myChart.setOption(graphOption(info.graph))
               }
 
-              // 更新消息
               if (data.updates?.response) {
                 updateLastReceivedMessage(
                   data.updates.response,
@@ -285,7 +276,6 @@ const sendMessage = () => {
                 )
               }
 
-              // 更新历史
               if (data.history) {
                 state.history = data.history
               }

@@ -8,10 +8,10 @@ from enum import Enum
 
 class CoTMode(Enum):
     """思维链模式"""
-    ZERO_SHOT = "zero_shot"                # Zero-shot CoT
-    FEW_SHOT = "few_shot"                  # Few-shot CoT
-    SELF_CONSISTENCY = "self_consistency"  # 自洽性推理
-    DIRECT = "direct"                      # 直接回答 (无 CoT)
+    ZERO_SHOT = "zero_shot"
+    FEW_SHOT = "few_shot"
+    SELF_CONSISTENCY = "self_consistency"
+    DIRECT = "direct"
 
 
 @dataclass
@@ -20,7 +20,7 @@ class ReasoningStep:
     step_num: int = 0
     title: str = ""
     content: str = ""
-    evidence: List[str] = field(default_factory=list)  # 支撑证据
+    evidence: List[str] = field(default_factory=list)
     conclusion: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
@@ -41,7 +41,7 @@ class ReasoningChain:
     steps: List[ReasoningStep] = field(default_factory=list)
     intermediate_conclusions: List[str] = field(default_factory=list)
     final_answer: str = ""
-    consistency_score: float = 0.0          # 一致性检查 (仅 SELF_CONSISTENCY 模式)
+    consistency_score: float = 0.0  # 仅 SELF_CONSISTENCY 模式使用
     path_answers: List[str] = field(default_factory=list)
     depth: int = 1
     used_knowledge: List[str] = field(default_factory=list)
@@ -94,10 +94,8 @@ class FewShotExample:
 class CoTReasoner:
     """思维链推理器：提供多种 CoT 模式来增强推理能力"""
 
-    # 默认的 Zero-shot CoT 后缀
     ZERO_SHOT_SUFFIX = "\n\n请逐步思考并给出答案："
 
-    # 默认的 Few-shot 示例 (问答领域)
     DEFAULT_EXAMPLES: List[FewShotExample] = [
         FewShotExample(
             question="人工智能和机器学习有什么区别？",
@@ -121,7 +119,6 @@ class CoTReasoner:
         )
     ]
 
-    # 问题类型关键词
     _QUERY_TYPE_KEYWORDS = [
         ("定义类", ["什么", "什么是", "定义"]),
         ("事实类", ["谁", "哪里", "什么时候"]),
@@ -130,7 +127,6 @@ class CoTReasoner:
         ("比较类", ["比较", "区别", "不同"]),
     ]
 
-    # 实体提取正则
     _ENTITY_PATTERNS = [
         r'[""]([^""]+)[""]',
         r'[「』]([^「」]+)[「」]',
@@ -196,7 +192,6 @@ class CoTReasoner:
         """Few-shot CoT: 基于示例推理"""
         example_prompts = [ex.to_prompt() for ex in self.examples[:2]]
 
-        # 问题分析步骤
         step1 = ReasoningStep()
         step1.step_num = 1
         step1.title = "📖 问题理解"
@@ -205,7 +200,6 @@ class CoTReasoner:
         step1.conclusion = f"这是一个需要综合分析的问题"
         chain.steps.append(step1)
 
-        # 知识匹配步骤
         if knowledge:
             step2 = ReasoningStep()
             step2.step_num = 2
@@ -216,7 +210,6 @@ class CoTReasoner:
             chain.steps.append(step2)
             chain.used_knowledge.append(knowledge[:200])
 
-        # 推理分析步骤
         step3 = ReasoningStep()
         step3.step_num = 3
         step3.title = "🔍 推理分析"
@@ -226,7 +219,6 @@ class CoTReasoner:
         chain.steps.append(step3)
         chain.intermediate_conclusions.append(step3.conclusion)
 
-        # 综合结论步骤
         step4 = ReasoningStep()
         step4.step_num = 4
         step4.title = "✅ 综合结论"
@@ -264,12 +256,10 @@ class CoTReasoner:
             path_chain.final_answer = path_answer
             all_answers.append(path_answer)
 
-        # 选择最一致的答案
         chain.path_answers = all_answers
         chain.final_answer = self._select_consistent_answer(all_answers)
         chain.consistency_score = self._calculate_consistency(all_answers)
 
-        # 记录最终推理链
         chain.steps.append(self._create_step(1, "多路径推理",
             f"生成了 {len(all_answers)} 条推理路径", [], "完成多路径分析"))
         chain.steps.append(self._create_step(2, "一致性选择",
@@ -287,8 +277,6 @@ class CoTReasoner:
         step.evidence = evidence
         step.conclusion = conclusion
         return step
-
-    # ==================== 辅助方法 ====================
 
     def _decompose_question(self, query: str, depth: int) -> List[str]:
         """分解问题为子问题"""
@@ -404,8 +392,6 @@ class CoTReasoner:
 
         return sum(scores) / len(scores) if scores else 1.0
 
-    # ==================== Prompt 构建 ====================
-
     def build_cot_prompt(self, query: str, knowledge: str = "") -> str:
         """构建带有 CoT 的完整 prompt"""
         if self.mode == CoTMode.DIRECT:
@@ -499,8 +485,6 @@ class CoTReasoner:
 请综合以上路径，给出最一致、最准确的答案："""
         return self._render_template(template, query, knowledge)
 
-
-# ==================== 便捷函数 ====================
 
 _default_reasoner: Optional[CoTReasoner] = None
 
